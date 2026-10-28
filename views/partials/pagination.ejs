@@ -1,0 +1,13 @@
+<%# Expects: pg {page,pages,total,pageSize}, base (path), params (object of current filters) %>
+<% if (pg && pg.total > 0) { %>
+<nav class="pager" aria-label="صفحه‌بندی">
+  <span class="pager-info">نمایش <%= Number((pg.page - 1) * pg.pageSize + 1).toLocaleString('fa-IR') %> تا <%= Number(Math.min(pg.page * pg.pageSize, pg.total)).toLocaleString('fa-IR') %> از <%= Number(pg.total).toLocaleString('fa-IR') %></span>
+  <% if (pg.pages > 1) { %>
+  <span class="pager-links">
+    <% if (pg.page > 1) { %><a class="button button-outline button-small" rel="prev" href="<%= base %><%= qs({ ...params, page: pg.page - 1 }) %>">→ قبلی</a><% } else { %><span class="button button-outline button-small is-disabled" aria-disabled="true">→ قبلی</span><% } %>
+    <span class="pager-current" aria-current="page">صفحهٔ <%= Number(pg.page).toLocaleString('fa-IR') %> از <%= Number(pg.pages).toLocaleString('fa-IR') %></span>
+    <% if (pg.page < pg.pages) { %><a class="button button-outline button-small" rel="next" href="<%= base %><%= qs({ ...params, page: pg.page + 1 }) %>">بعدی ←</a><% } else { %><span class="button button-outline button-small is-disabled" aria-disabled="true">بعدی ←</span><% } %>
+  </span>
+  <% } %>
+</nav>
+<% } %>

@@ -1,0 +1,13 @@
+<%- include('../partials/header', {title}) %>
+<div class="admin-shell"><%- include('../partials/admin-nav') %><div class="admin-content">
+  <div class="admin-topbar"><div><span class="section-kicker">SECURITY / MY ACCOUNT</span><h1>تنظیمات حساب مدیریتی</h1><p>برای تغییر نام کاربری یا رمز عبور، واردکردن رمز فعلی الزامی است.</p></div><a class="button button-outline button-small" href="/admin">بازگشت به پنل</a></div>
+  <section class="admin-panel"><div class="admin-panel-head"><div><h2>تغییر اعتبارنامه‌ها</h2><p>پس از ذخیره، نشست فعلی و نشست‌های قبلی باطل می‌شوند و باید دوباره وارد شوید.</p></div></div>
+    <form action="/admin/account/credentials" method="post" class="form-stack admin-create-form"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <label for="username">نام کاربری جدید</label><input class="form-control" id="username" name="username" value="<%= currentAdmin.username %>" autocomplete="username" minlength="3" maxlength="64" pattern="[a-zA-Z0-9_.-]{3,64}" required>
+      <p class="muted-text">نقش شما: <b><%= roleLabels[currentAdmin.role] %></b><% if (currentAdmin.last_login_at) { %> · آخرین ورود: <%= new Date(currentAdmin.last_login_at).toLocaleString('fa-IR') %><% } %></p>
+      <label for="current-password">رمز عبور فعلی</label><div class="password-field"><input class="form-control" id="current-password" name="current_password" type="password" dir="ltr" autocomplete="current-password" maxlength="200" required><button type="button" class="password-toggle" data-password-toggle="current-password" aria-pressed="false" aria-label="نمایش رمز فعلی">نمایش</button></div>
+      <label for="new-password">رمز عبور جدید (اختیاری)</label><div class="password-field"><input class="form-control" id="new-password" name="new_password" type="password" dir="ltr" autocomplete="new-password" minlength="12" maxlength="200" placeholder="برای تغییرندادن رمز، خالی بگذارید" aria-describedby="new-password-hint"><button type="button" class="password-toggle" data-password-toggle="new-password" aria-pressed="false" aria-label="نمایش رمز جدید">نمایش</button></div><small id="new-password-hint" class="muted-text">حداقل ۱۲ نویسه، متفاوت از رمز فعلی و بدون نام کاربری.</small>
+      <div class="form-actions"><button class="button button-primary" type="submit" data-confirm="اعتبارنامه‌ها ذخیره و همهٔ نشست‌های قبلی باطل شوند؟">ذخیره و خروج امن</button></div>
+    </form>
+  </section>
+</div></div><%- include('../partials/footer') %>

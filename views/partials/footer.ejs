@@ -1,0 +1,11 @@
+</main>
+<footer class="site-footer">
+  <div class="container footer-grid">
+    <div class="footer-brand"><a class="brand brand-light" href="/"><span class="brand-mark"><img src="/public/images/nogiti-logo-96.webp" srcset="/public/images/nogiti-logo-96.webp 2x, /public/images/nogiti-logo-144.webp 3x" alt="" width="48" height="48" decoding="async"></span><span><strong><%= siteName %></strong><small><%= siteTagline %></small></span></a><p>ابزارهای کاربردی، آموزش تخصصی و منابع مهندسی تأسیسات؛ یک‌جا و در دسترس شما.</p></div>
+    <div><h3><%= t('footer.quickLinks') %></h3><a href="/tools"><%= t('nav.tools') %></a><a href="/shop"><%= t('nav.shop') %></a><a href="/articles"><%= t('nav.articles') %></a><a href="/about"><%= t('nav.about') %></a></div>
+    <div><h3><%= t('footer.accountSupport') %></h3><a href="/account"><%= t('footer.library') %></a><a href="/login"><%= t('nav.login') %></a><% const footerEmail = siteEmail || 'nugasbnd@gmail.com'; %><a href="mailto:<%= footerEmail %>"><%= footerEmail %></a></div>
+  </div>
+  <div class="container footer-bottom"><span>© <%= new Date().getFullYear() %> <%= siteName %>. <%= t('footer.rights') %></span><span><%= t('footer.tagline') %></span></div>
+</footer>
+</body>
+</html>

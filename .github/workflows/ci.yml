@@ -1,0 +1,32 @@
+name: CI
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: nugas_user
+          POSTGRES_PASSWORD: ci_only_password
+          POSTGRES_DB: nugas_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U nugas_user -d nugas_test"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgres://nugas_user:ci_only_password@localhost:5432/nugas_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm audit --omit=dev --audit-level=high
+      - run: npm run lint:syntax
+      - run: npm test
+      - run: npm run test:integration

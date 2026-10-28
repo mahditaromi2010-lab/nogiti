@@ -1,0 +1,6 @@
+<%- include('partials/header', {title}) %>
+<section class="error-page section"><div class="container"><div class="error-card"><span class="error-mark" aria-hidden="true">N/</span><span class="section-kicker">Nogiti / MESSAGE</span><h1><%= title %></h1><p><%= message %></p>
+<% if (typeof requestId !== 'undefined' && requestId && typeof message === 'string' && message.includes('کد پیگیری')) { %><p class="error-ref">کد پیگیری خطا: <code dir="ltr"><%= requestId %></code></p><% } %>
+<div class="error-actions"><% if (typeof actionHref !== 'undefined' && actionHref) { %><a href="<%= actionHref %>" class="button button-primary"><%= actionLabel || 'ادامه' %> ←</a><a href="/" class="button button-outline">صفحهٔ اصلی</a><% } else { %><a href="/" class="button button-primary">بازگشت به صفحه اصلی ←</a><% } %></div>
+</div></div></section>
+<%- include('partials/footer') %>

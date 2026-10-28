@@ -1,0 +1,16 @@
+<%- include('../partials/header', {title}) %><div class="admin-shell"><%- include('../partials/admin-nav') %><div class="admin-content">
+<div class="admin-topbar"><div><span class="section-kicker">ABOUT US / TEAM</span><h1><%= member ? t('common.edit') : t('admin.team.new') %></h1></div><a href="/admin/team" class="button button-outline button-small"><%= t('common.back') %></a></div>
+<form class="admin-panel admin-form" action="<%= member ? `/admin/team/${member.id}/edit` : '/admin/team' %>" method="post" enctype="multipart/form-data" data-unsaved-guard>
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+  <div class="form-grid">
+    <div class="form-field"><label for="name"><%= t('admin.team.name') %> *</label><input class="form-control" id="name" name="name" maxlength="160" value="<%= member?.name || '' %>" required></div>
+    <div class="form-field"><label for="role"><%= t('admin.team.role') %></label><input class="form-control" id="role" name="role" maxlength="160" value="<%= member?.role || '' %>"></div>
+    <div class="form-field form-span-2"><label for="bio"><%= t('admin.team.bio') %></label><textarea class="form-control" id="bio" name="bio" rows="3" maxlength="1200"><%= member?.bio || '' %></textarea></div>
+    <div class="form-field"><label for="photo"><%= t('admin.team.photo') %></label><input class="form-control file-control" id="photo" type="file" name="photo" accept="image/jpeg,image/png,image/webp,image/gif"><small>حداکثر ۸ مگابایت؛ JPG، PNG، WebP یا GIF.</small></div>
+    <div class="form-field"><label for="link_url"><%= t('admin.team.link') %></label><input class="form-control" id="link_url" name="link_url" dir="ltr" value="<%= member?.link_url || '' %>" placeholder="https://..."></div>
+    <div class="form-field"><label for="display_order"><%= t('admin.team.order') %></label><input class="form-control" id="display_order" name="display_order" type="number" value="<%= member?.display_order ?? 0 %>"></div>
+    <div class="form-field"><label class="check-line"><input type="checkbox" name="is_active" <%= !member || member.is_active ? 'checked' : '' %>> <%= t('admin.team.active') %></label></div>
+  </div>
+  <div class="form-actions"><button class="button button-primary" type="submit" data-busy-label="در حال ذخیره…"><%= t('common.save') %></button><a href="/admin/team" class="button button-outline"><%= t('common.cancel') %></a></div>
+</form>
+</div></div><%- include('../partials/footer') %>

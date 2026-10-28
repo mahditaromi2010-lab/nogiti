@@ -1,0 +1,21 @@
+<%- include('partials/header', {title}) %>
+<section class="account-section section"><div class="container">
+  <div class="account-welcome"><div><span class="section-kicker">SUPPORT</span><h1><%= t('tickets.newTicket') %></h1></div><a class="button button-outline" href="/account/tickets"><%= t('common.back') %></a></div>
+  <section class="account-panel">
+    <form action="/account/tickets" method="post" class="profile-form">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <div class="form-grid">
+        <div class="form-field form-span-2"><label for="subject"><%= t('tickets.subject') %> *</label><input class="form-control" id="subject" name="subject" maxlength="200" required></div>
+        <div class="form-field"><label for="category"><%= t('common.category') %></label><select class="form-control" id="category" name="category">
+          <% ['order','product','account','technical','other'].forEach(c => { %><option value="<%= c %>"><%= t('tickets.category.'+c) %></option><% }) %>
+        </select></div>
+        <div class="form-field"><label for="priority"><%= t('common.priority') %></label><select class="form-control" id="priority" name="priority">
+          <% ['low','normal','high','urgent'].forEach(p => { %><option value="<%= p %>" <%= p==='normal'?'selected':'' %>><%= t('tickets.priority.'+p) %></option><% }) %>
+        </select></div>
+        <div class="form-field form-span-2"><label for="message"><%= t('tickets.message') %> *</label><textarea class="form-control" id="message" name="message" rows="6" maxlength="4000" required></textarea></div>
+      </div>
+      <div class="profile-bottom"><span></span><button class="button button-dark" type="submit"><%= t('tickets.submit') %></button></div>
+    </form>
+  </section>
+</div></section>
+<%- include('partials/footer') %>

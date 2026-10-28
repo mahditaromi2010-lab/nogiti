@@ -1,0 +1,23 @@
+<%- include('../partials/header', {title}) %><div class="admin-shell"><%- include('../partials/admin-nav') %><div class="admin-content">
+<div class="admin-topbar"><div><span class="section-kicker">SUPPORT TICKET #<%= ticket.id %></span><h1><%= ticket.subject %></h1><p>کاربر: <%= (ticket.first_name+' '+ticket.last_name).trim() || ticket.phone %> · <span dir="ltr"><%= ticket.phone %></span></p></div><a href="/admin/tickets" class="button button-outline button-small"><%= t('common.back') %></a></div>
+<section class="admin-panel">
+  <form action="/admin/tickets/<%= ticket.id %>/status" method="post" class="filter-bar">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <div class="filter-field"><label for="status"><%= t('common.status') %></label><select class="form-control" id="status" name="status"><% ['open','pending','answered','closed'].forEach(s => { %><option value="<%= s %>" <%= ticket.status===s?'selected':'' %>><%= t('tickets.status.'+s) %></option><% }) %></select></div>
+    <div class="filter-field"><label for="priority"><%= t('common.priority') %></label><select class="form-control" id="priority" name="priority"><% ['low','normal','high','urgent'].forEach(p => { %><option value="<%= p %>" <%= ticket.priority===p?'selected':'' %>><%= t('tickets.priority.'+p) %></option><% }) %></select></div>
+    <div class="filter-actions"><button class="button button-dark button-small" type="submit"><%= t('admin.tickets.changeStatus') %></button></div>
+  </form>
+  <div class="ticket-thread">
+    <% messages.forEach(m => { %>
+    <div class="ticket-message ticket-message-<%= m.author_type %>">
+      <div class="ticket-message-head"><b><%= m.author_type === 'admin' ? 'پشتیبانی' : ((ticket.first_name+' '+ticket.last_name).trim() || 'کاربر') %></b><time><%= new Date(m.created_at).toLocaleString('fa-IR', { dateStyle: 'medium', timeStyle: 'short' }) %></time></div>
+      <p><%= m.body %></p>
+    </div>
+    <% }) %>
+  </div>
+  <form action="/admin/tickets/<%= ticket.id %>/reply" method="post" class="ticket-reply-form">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <textarea class="form-control" name="message" rows="4" maxlength="4000" placeholder="<%= t('tickets.replyPlaceholder') %>" required></textarea>
+    <div class="form-actions"><button class="button button-primary" type="submit"><%= t('common.reply') %></button></div>
+  </form>
+</section></div></div><%- include('../partials/footer') %>

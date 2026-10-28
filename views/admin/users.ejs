@@ -1,0 +1,15 @@
+<%- include('../partials/header', {title}) %><div class="admin-shell"><%- include('../partials/admin-nav') %><div class="admin-content">
+<div class="admin-topbar"><div><span class="section-kicker">CUSTOMER MANAGEMENT</span><h1>کاربران</h1><p>مشاهده اطلاعات پایه و کنترل دسترسی حساب‌های کاربری. غیرفعال‌سازی، نشست فعلی کاربر را هم پایان می‌دهد.</p></div></div>
+<section class="admin-panel">
+  <form class="filter-bar" method="get" action="/admin/users" role="search">
+    <div class="filter-field filter-grow"><label for="f-q">جست‌وجو</label><input class="form-control" id="f-q" name="q" type="search" value="<%= filters.q %>" placeholder="نام، نام خانوادگی یا شمارهٔ موبایل" maxlength="100"></div>
+    <div class="filter-field"><label for="f-state">وضعیت</label><select class="form-control" id="f-state" name="state"><option value="">همه</option><option value="active" <%= filters.state==='active'?'selected':'' %>>فعال</option><option value="inactive" <%= filters.state==='inactive'?'selected':'' %>>غیرفعال</option></select></div>
+    <div class="filter-actions"><button class="button button-dark button-small" type="submit">اعمال</button><% if (filters.q || filters.state) { %><a class="button button-quiet button-small" href="/admin/users">حذف فیلترها</a><% } %></div>
+  </form>
+  <% const back = '/admin/users' + qs({ ...filters, page: pg.page }); %>
+  <div class="table-responsive"><table class="data-table"><caption class="sr-only">فهرست کاربران</caption><thead><tr><th scope="col">کاربر</th><th scope="col">موبایل</th><th scope="col">شاخه / رشته</th><th scope="col">سفارش موفق</th><th scope="col">وضعیت</th><th scope="col"><span class="sr-only">عملیات</span></th></tr></thead><tbody>
+  <% users.forEach(u=>{ %><tr><td><b><%= (u.first_name+' '+u.last_name).trim() || 'نامشخص' %></b><small class="table-sub">عضویت: <%= new Date(u.created_at).toLocaleDateString('fa-IR') %></small></td><td dir="ltr"><%= u.phone %></td><td><%= [u.branch,u.field].filter(Boolean).join(' / ') || '—' %></td><td><%= Number(u.paid_orders).toLocaleString('fa-IR') %></td><td><span class="status-pill <%= u.is_active?'status-published':'status-archived' %>"><%= u.is_active?'فعال':'غیرفعال' %></span></td><td><form action="/admin/users/<%= u.id %>/toggle" method="post"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><input type="hidden" name="back" value="<%= back %>"><button class="button-link <%= u.is_active?'danger-text':'' %>" type="submit" data-confirm="<%= u.is_active ? 'حساب این کاربر غیرفعال شود؟ کاربر تا فعال‌سازی دوباره نمی‌تواند وارد شود.' : 'حساب این کاربر دوباره فعال شود؟' %>" data-confirm-label="<%= u.is_active?'غیرفعال کن':'فعال کن' %>"><%= u.is_active?'غیرفعال‌سازی':'فعال‌سازی' %></button></form></td></tr><% }) %>
+  <% if(!users.length){ %><tr><td colspan="6" class="table-empty"><%= (filters.q || filters.state) ? 'کاربری با این فیلترها پیدا نشد.' : 'کاربری وجود ندارد.' %></td></tr><% } %>
+  </tbody></table></div>
+  <%- include('../partials/pagination', { pg, base: '/admin/users', params: filters }) %>
+</section></div></div><%- include('../partials/footer') %>

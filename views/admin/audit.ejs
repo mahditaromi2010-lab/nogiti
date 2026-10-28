@@ -1,0 +1,16 @@
+<%- include('../partials/header', {title}) %>
+<div class="admin-shell"><%- include('../partials/admin-nav') %><div class="admin-content">
+  <div class="admin-topbar"><div><span class="section-kicker">SECURITY / AUDIT TRAIL</span><h1>گزارش رویدادهای امنیتی</h1><p>ورودها، تغییرات حساب‌های مدیریتی و عملیات پنل؛ بدون ذخیرهٔ رمز عبور، کد تأیید یا محتوای فرم‌ها.</p></div><a class="button button-outline button-small" href="/admin">بازگشت به نمای کلی</a></div>
+  <section class="admin-panel">
+  <form class="filter-bar" method="get" action="/admin/audit" role="search">
+    <div class="filter-field"><label for="f-kind">نوع رویداد</label><select class="form-control" id="f-kind" name="kind"><option value="">همه</option><option value="login" <%= filters.kind==='login'?'selected':'' %>>ورود و قفل ورود</option><option value="account" <%= filters.kind==='account'?'selected':'' %>>حساب‌های مدیریتی</option><option value="mutation" <%= filters.kind==='mutation'?'selected':'' %>>تغییرات محتوا و تنظیمات</option></select></div>
+    <div class="filter-field filter-grow"><label for="f-actor">نام کاربری مدیر</label><input class="form-control" id="f-actor" name="actor" value="<%= filters.actor %>" dir="ltr" maxlength="64" placeholder="site_owner"></div>
+    <div class="filter-actions"><button class="button button-dark button-small" type="submit">اعمال</button><% if (filters.kind || filters.actor) { %><a class="button button-quiet button-small" href="/admin/audit">حذف فیلترها</a><% } %></div>
+  </form>
+  <div class="table-responsive"><table class="data-table"><caption class="sr-only">رویدادهای ثبت‌شده</caption><thead><tr><th scope="col">زمان</th><th scope="col">مدیر</th><th scope="col">رویداد</th><th scope="col">مسیر</th><th scope="col">نتیجه</th><th scope="col">IP</th></tr></thead><tbody>
+  <% items.forEach(item => { %><tr><td><%= new Date(item.created_at).toLocaleString('fa-IR') %></td><td><%= ([item.first_name,item.last_name].filter(Boolean).join(' ') || item.phone || (item.admin_account_id ? `شناسه ${item.admin_account_id}` : 'ناشناس')) %></td><td><strong dir="ltr"><%= item.action %></strong><small class="table-sub"><%= item.method %></small></td><td><code dir="ltr"><%= item.route %></code></td><td><span class="status-pill <%= item.status_code < 400 ? 'status-paid' : 'status-failed' %>"><%= item.status_code %></span></td><td dir="ltr"><%= item.ip_address || '—' %></td></tr><% }) %>
+  <% if (!items.length) { %><tr><td colspan="6" class="table-empty">رویدادی برای نمایش وجود ندارد.</td></tr><% } %>
+  </tbody></table></div>
+  <%- include('../partials/pagination', { pg, base: '/admin/audit', params: filters }) %>
+  </section>
+</div></div><%- include('../partials/footer') %>

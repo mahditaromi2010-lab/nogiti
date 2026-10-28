@@ -1,0 +1,23 @@
+<%- include('partials/header', {title}) %>
+<section class="account-section section"><div class="container">
+  <div class="account-welcome"><div><span class="section-kicker">SUPPORT #<%= ticket.id %></span><h1><%= ticket.subject %></h1><p><span class="status-pill status-ticket-<%= ticket.status %>"><%= t('tickets.status.'+ticket.status) %></span> · <%= t('tickets.category.'+ticket.category) %> · <%= t('tickets.priority.'+ticket.priority) %></p></div><a class="button button-outline" href="/account/tickets"><%= t('common.back') %></a></div>
+  <section class="account-panel">
+    <h2 class="sr-only"><%= t('tickets.thread') %></h2>
+    <div class="ticket-thread">
+      <% messages.forEach(m => { %>
+      <div class="ticket-message ticket-message-<%= m.author_type %>">
+        <div class="ticket-message-head"><b><%= m.author_type === 'admin' ? 'پشتیبانی Nogiti' : 'شما' %></b><time><%= new Date(m.created_at).toLocaleString('fa-IR', { dateStyle: 'medium', timeStyle: 'short' }) %></time></div>
+        <p><%= m.body %></p>
+      </div>
+      <% }) %>
+    </div>
+    <% if (ticket.status !== 'closed') { %>
+    <form action="/account/tickets/<%= ticket.id %>/reply" method="post" class="ticket-reply-form">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <textarea class="form-control" name="message" rows="4" maxlength="4000" placeholder="<%= t('tickets.replyPlaceholder') %>" required></textarea>
+      <div class="form-actions"><button class="button button-primary" type="submit"><%= t('common.send') %></button></div>
+    </form>
+    <% } else { %><p class="muted-text">این تیکت بسته شده است.</p><% } %>
+  </section>
+</div></section>
+<%- include('partials/footer') %>

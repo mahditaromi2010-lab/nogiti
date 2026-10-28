@@ -1,0 +1,14 @@
+node_modules
+.env
+.git
+.gitignore
+npm-debug.log*
+uploads
+reference-original.html
+*.zip
+test
+.github
+backups
+coverage
+*.md
+!README.md

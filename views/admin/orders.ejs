@@ -1,0 +1,14 @@
+<%- include('../partials/header', {title}) %><div class="admin-shell"><%- include('../partials/admin-nav') %><div class="admin-content">
+<div class="admin-topbar"><div><span class="section-kicker">COMMERCE / ORDERS</span><h1>سفارش‌ها و پرداخت‌ها</h1><p>وضعیت پرداخت تنها پس از بررسی پاسخ درگاه در سمت سرور نهایی می‌شود.</p></div></div>
+<section class="admin-panel">
+  <form class="filter-bar" method="get" action="/admin/orders" role="search">
+    <div class="filter-field filter-grow"><label for="f-q">جست‌وجو</label><input class="form-control" id="f-q" name="q" type="search" value="<%= filters.q %>" placeholder="شمارهٔ سفارش، موبایل، نام یا کد پیگیری" maxlength="100"></div>
+    <div class="filter-field"><label for="f-status">وضعیت</label><select class="form-control" id="f-status" name="status"><option value="">همه</option><% Object.entries(orderStatusLabels).forEach(([k,v]) => { %><option value="<%= k %>" <%= filters.status===k?'selected':'' %>><%= v %></option><% }) %></select></div>
+    <div class="filter-actions"><button class="button button-dark button-small" type="submit">اعمال</button><% if (filters.q || filters.status) { %><a class="button button-quiet button-small" href="/admin/orders">حذف فیلترها</a><% } %></div>
+  </form>
+  <div class="table-responsive"><table class="data-table"><caption class="sr-only">فهرست سفارش‌ها</caption><thead><tr><th scope="col">سفارش</th><th scope="col">خریدار</th><th scope="col">محصول</th><th scope="col">مبلغ</th><th scope="col">وضعیت</th><th scope="col">کد پیگیری</th><th scope="col">تاریخ</th></tr></thead><tbody>
+  <% orders.forEach(o=>{ %><tr><td>#<%= o.id %></td><td><b><%= (o.first_name+' '+o.last_name).trim() || 'کاربر' %></b><small class="table-sub" dir="ltr"><%= o.phone %></small></td><td><%= o.items || '—' %></td><td><%= money(o.total_toman) %></td><td><span class="status-pill status-<%= o.status %>"><%= orderStatusLabels[o.status] || o.status %></span></td><td dir="ltr"><%= o.ref_id || '—' %></td><td><%= new Date(o.created_at).toLocaleString('fa-IR', { dateStyle: 'medium', timeStyle: 'short' }) %></td></tr><% }) %>
+  <% if(!orders.length){ %><tr><td colspan="7" class="table-empty"><%= (filters.q || filters.status) ? 'سفارشی با این فیلترها پیدا نشد.' : 'سفارشی وجود ندارد.' %></td></tr><% } %>
+  </tbody></table></div>
+  <%- include('../partials/pagination', { pg, base: '/admin/orders', params: filters }) %>
+</section></div></div><%- include('../partials/footer') %>
