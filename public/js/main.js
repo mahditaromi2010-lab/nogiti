@@ -131,3 +131,11 @@ if (window.matchMedia('(max-width: 800px)').matches) {
   // Scroll only the strip itself (scrollIntoView could also move the page and the focus origin).
   if (strip) strip.scrollLeft += active.getBoundingClientRect().left - strip.getBoundingClientRect().left - (strip.clientWidth - active.clientWidth) / 2;
 }
+
+// Register the service worker so the installed app (TWA/PWA) has an offline shell.
+// Guarded: only runs over HTTPS (or localhost) where service workers are allowed anyway.
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => { /* non-fatal: site still works without it */ });
+  });
+}

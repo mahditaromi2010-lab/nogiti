@@ -99,6 +99,20 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
   app.use('/public/fonts', express.static(path.join(ROOT, 'public', 'fonts'), { maxAge: IS_PROD ? '365d' : 0, immutable: IS_PROD, index: false }));
   app.use('/public', express.static(path.join(ROOT, 'public'), { maxAge: IS_PROD ? '7d' : 0, index: false }));
   app.use('/media/covers', express.static(COVERS_DIR, { maxAge: IS_PROD ? '1d' : 0, index: false, dotfiles: 'deny' }));
+  // Served from the root path (not /public/...) so the service worker's default scope covers the whole site,
+  // not just the /public/ subtree — needed for the installed app (TWA/PWA) to control navigations site-wide.
+  app.get('/sw.js', (_req, res) => {
+    res.set('Cache-Control', IS_PROD ? 'public, max-age=3600' : 'no-store');
+    res.set('Content-Type', 'application/javascript; charset=utf-8');
+    res.sendFile(path.join(ROOT, 'public', 'sw.js'));
+  });
+  app.get('/offline.html', (_req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.sendFile(path.join(ROOT, 'public', 'offline.html'));
+  });
+  // Digital Asset Links: proves this domain and the Android (TWA) app share the same owner, required by
+  // Chrome/Android for the installed app to open without a visible browser address bar.
+  app.use('/.well-known', express.static(path.join(ROOT, 'public', '.well-known'), { index: false }));
 
   // Health endpoints (live/ready split from Paradigmshift HealthController). Mounted before sessions so probes never create sessions.
   app.get('/health', (_req, res) => res.json({ ok: true, service: 'nogiti-platform' }));

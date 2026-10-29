@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>اتصال اینترنت برقرار نیست — نوگیتی</title>
+<meta name="theme-color" content="#0b2e26">
+<style>
+  :root { --emerald: #10b981; --emerald-dark: #047857; --ink: #0b2e26; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    background: var(--ink); color: #f0fdf4; font-family: system-ui, -apple-system, 'Vazirmatn', sans-serif;
+    text-align: center; padding: 24px;
+  }
+  .card { max-width: 420px; }
+  .icon { font-size: 48px; margin-bottom: 16px; }
+  h1 { font-size: 1.25rem; margin: 0 0 8px; }
+  p { color: #bbf7d0; line-height: 1.8; margin: 0 0 24px; }
+  button {
+    background: var(--emerald); color: #04140f; border: none; border-radius: 10px;
+    padding: 12px 28px; font-size: 1rem; font-weight: 600; cursor: pointer;
+  }
+  button:hover { background: var(--emerald-dark); color: #f0fdf4; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">📡</div>
+    <h1>اتصال اینترنت برقرار نیست</h1>
+    <p>به‌نظر می‌رسد آفلاین هستید. اتصال خود را بررسی کنید و دوباره تلاش کنید.</p>
+    <button onclick="location.reload()">تلاش دوباره</button>
+  </div>
+</body>
+</html>
