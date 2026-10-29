@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "ir.novingity.app",
+      "sha256_cert_fingerprints": [
+        "6C:A9:A9:C7:B5:AE:90:93:62:96:36:5B:BA:CB:46:35:90:E3:D7:DD:4E:50:95:B7:63:CF:46:27:44:21:3E:F1"
+      ]
+    }
+  }
+]

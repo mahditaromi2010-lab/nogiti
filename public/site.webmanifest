@@ -5,6 +5,7 @@
   "lang": "fa-IR",
   "dir": "rtl",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#0b2e26",
   "theme_color": "#0b2e26",
