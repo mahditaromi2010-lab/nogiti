@@ -516,6 +516,9 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
     return r.rows.map(mapCoverageRow);
   }
   app.get('/coverage-map', asyncRoute(async (req, res) => {
+    // Temporarily hidden at owner's request (2026-11-02): public page disabled, 404, pending further
+    // development. Underlying route/view/data/admin CRUD are left fully intact to resume later.
+    if (true) return renderError(res, 404, 'پیدا نشد', 'این صفحه موجود نیست.');
     const areas = await readCoverageAreas();
     res.render('coverage-map', {
       title: res.locals.t('coverageMap.pageTitle'),
@@ -528,6 +531,8 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
   // Same read function the page itself renders from server-side, exposed as JSON so the map's client-side
   // filters/search work over the live dataset without a full page reload.
   app.get('/api/coverage-areas', asyncRoute(async (req, res) => {
+    // Hidden alongside /coverage-map (see note above, 2026-11-02).
+    if (true) return res.status(404).json({ error: 'not found' });
     const areas = await readCoverageAreas();
     const filtered = filterCoverageAreas(areas, { city: req.query.city, status: req.query.status, gasService: req.query.gasService, riser: req.query.riser, search: req.query.q });
     res.json({ areas: filtered, summary: summarizeCoverageAreas(filtered) });
@@ -538,6 +543,8 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
   const CONSULTATION_PROJECT_STATUSES = Object.keys(PROJECT_STATUS_FORM_LABELS);
   const CONSULTATION_CONTACT_METHODS = Object.keys(CONTACT_METHOD_LABELS);
   app.post('/consultation-requests', coverUpload.single('attachment'), multipartCsrf, verifyUploads(imagePolicy, '/coverage-map#consultation-form'), asyncRoute(async (req, res) => {
+    // Hidden alongside /coverage-map (see note above, 2026-11-02).
+    if (true) return renderError(res, 404, 'پیدا نشد', 'این صفحه موجود نیست.');
     const fullName = normalizeText(req.body.full_name, 160);
     const mobileRaw = String(req.body.mobile || '');
     const mobile = normalizeIranMobile(mobileRaw);

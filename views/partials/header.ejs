@@ -27,8 +27,7 @@
       <a href="/tools"><%= t('nav.tools') %></a>
       <a href="/shop"><%= t('nav.shop') %></a>
       <a href="/articles"><%= t('nav.articles') %></a>
-      <a href="/coverage-map"><%= t('nav.coverageMap') %></a>
-      <a href="/about"><%= t('nav.about') %></a>
+<%# Hormozgan coverage map: temporarily hidden from nav at owner's request (2026-11-02), feature code left intact for future resumption. <a href="/coverage-map"><%= t('nav.coverageMap') %></a> %>      <a href="/about"><%= t('nav.about') %></a>
       <% if (currentUser) { %><a href="/account/tickets"><%= t('nav.support') %></a><% } %>
       <% if (currentAdmin) { %><a href="<%= can('overview') ? '/admin' : (roleHome || '/admin/account') %>" class="nav-admin"><%= t('nav.admin') %></a><% } %>
     </nav>

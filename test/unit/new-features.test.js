@@ -1,44 +1,12 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { evaluateMeterConsumption, METER_RULES } = require('../../src/lib/meter-rules');
 const { filterCoverageAreas, summarizeCoverageAreas, statusColor, uniqueCities } = require('../../src/lib/coverage-filter');
 const { normalizeIranMobile } = require('../../src/lib/text');
 
-// ───────────── Item 3: G2.5 gas meter rule evaluator ─────────────
-test('G2.5 meter rule: consumption within 0.1-4 m3/h returns the exact fixed spec', () => {
-  for (const value of [0.1, 1, 2.5, 4]) {
-    const result = evaluateMeterConsumption(value);
-    assert.equal(result.ok, true, `${value} should be covered`);
-    assert.equal(result.rule.type, 'G2.5');
-    assert.equal(result.rule.replacementPipeLengthCm, 11);
-    assert.equal(result.rule.replacementPipeDiameterInch, 1);
-    assert.equal(result.rule.spacingCm, 10);
-    assert.equal(result.rule.heightCmMin, 180);
-    assert.equal(result.rule.heightCmMax, 220);
-  }
-});
-
-test('G2.5 meter rule: consumption outside 0.1-4 is reported as not covered, not fabricated', () => {
-  for (const value of [0.05, 4.01, 10, 100]) {
-    const result = evaluateMeterConsumption(value);
-    assert.equal(result.ok, false);
-    assert.equal(result.reason, 'not_covered');
-  }
-});
-
-test('G2.5 meter rule: invalid/non-numeric input is rejected distinctly from "not covered"', () => {
-  for (const value of [NaN, -1, 0, 'abc', undefined, null]) {
-    const result = evaluateMeterConsumption(value);
-    assert.equal(result.ok, false);
-    assert.equal(result.reason, 'invalid');
-  }
-});
-
-test('meter rules table can grow without changing the evaluator function', () => {
-  assert.ok(Array.isArray(METER_RULES));
-  assert.equal(METER_RULES.length, 1, 'only G2.5 is defined for now, by design');
-});
+// Note (2026-11-02): the standalone G2.5 meter calculator (src/lib/meter-rules.js) was merged into the
+// main gas-meter tool (public/js/tools.js calculateMeter()) per owner request, so its dedicated
+// evaluator/tests were removed along with the standalone UI section.
 
 // ───────────── Item 8: Iranian mobile number validator (reused from src/lib/text.js) ─────────────
 test('Iranian mobile validator accepts the documented formats (consultation-request form)', () => {

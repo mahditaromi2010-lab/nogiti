@@ -309,21 +309,25 @@ function calculateMeter() {
     const res = document.getElementById('meterResult');
     if (isNaN(c) || c <= 0) { res.innerHTML = tr('invalidConsumption'); res.classList.add('show'); return; }
 
+    // Values per the official "جدول ۴-۹" meter-capacity/specification table (authoritative reference,
+    // supersedes earlier approximated figures).
     let meter, wall, length, diam;
-    if (c >= 0.1 && c <= 6) {
-        meter = 'G4'; wall = '10 cm'; length = '15.5 cm'; diam = '1"';
+    if (c >= 0.1 && c <= 4) {
+        meter = 'G2.5'; wall = '10 cm'; length = '25-30 cm'; diam = '1"';
+    } else if (c >= 4.1 && c <= 6) {
+        meter = 'G4'; wall = '10 cm'; length = '25-30 cm'; diam = '1"';
     } else if (c >= 6.1 && c <= 10) {
-        meter = 'G6'; wall = '10 cm'; length = '22.5 cm'; diam = '1"';
+        meter = 'G6'; wall = '10 cm'; length = '25-30 cm'; diam = '1"';
     } else if (c >= 10.1 && c <= 16) {
-        meter = 'G10'; wall = '15 cm'; length = '28 cm'; diam = '1½"';
+        meter = 'G10'; wall = '15 cm'; length = '35-40 cm'; diam = '1½"';
     } else if (c >= 16.1 && c <= 25) {
-        meter = 'G16'; wall = '15 cm'; length = '28 cm'; diam = '1½"';
+        meter = 'G16'; wall = '15 cm'; length = '35-40 cm'; diam = '1½"';
     } else if (c >= 25.1 && c <= 40) {
-        meter = 'G25'; wall = '25 cm'; length = '33.5 cm'; diam = '2"';
+        meter = 'G25'; wall = '25 cm'; length = '82 cm'; diam = '2"';
     } else if (c >= 40.1 && c <= 65) {
-        meter = 'G40'; wall = '30 cm'; length = '68 cm'; diam = '2"';
+        meter = 'G40'; wall = '30 cm'; length = '120-150 cm'; diam = '2"';
     } else if (c >= 65.1 && c <= 100) {
-        meter = 'G65'; wall = '30 cm'; length = '68 cm'; diam = '2"';
+        meter = 'G65'; wall = '30 cm'; length = '120-150 cm'; diam = '2"';
     } else {
         res.innerHTML = tr('meterRangeError');
         res.classList.add('show'); return;
@@ -340,34 +344,10 @@ function calculateMeter() {
 }
 
 
-// G2.5 meter calculator: a small rules table (mirrors src/lib/meter-rules.js) instead of one hard-coded
-// if-statement, so a future meter type/rule can be added by appending a row here (and server-side).
-const METER_RULES = [
-  { type: 'G2.5', min: 0.1, max: 4, pipeLengthCm: 11, pipeDiameterInch: 1, spacingCm: 10, heightCmMin: 180, heightCmMax: 220 }
-];
-function calculateMeterG25() {
-  const c = parseFloat(document.getElementById('meterG25Consumption').value);
-  const res = document.getElementById('meterG25Result');
-  if (isNaN(c) || c <= 0) { res.innerHTML = tr('invalidConsumption'); res.classList.add('show'); return; }
-  const rule = METER_RULES.find(r => c >= r.min && c <= r.max);
-  if (!rule) {
-    res.innerHTML = tr('g25OutOfRange', c);
-    res.classList.add('show'); return;
-  }
-  res.innerHTML = `
-      <strong>${tr('meterClass')}:</strong> ${rule.type}<br>
-      <strong>${tr('g25SubstituteLength')}:</strong> ${rule.pipeLengthCm} cm<br>
-      <strong>${tr('g25SubstituteDiameter')}:</strong> ${rule.pipeDiameterInch}"<br>
-      <strong>${tr('g25Spacing')}:</strong> ${rule.spacingCm} cm<br>
-      <strong>${tr('g25Height')}:</strong> ${tr('g25HeightRange', rule.heightCmMin, rule.heightCmMax)}
-  `;
-  res.classList.add('show');
-}
-
 // Accessible button and live conversion bindings (no inline JavaScript required).
 document.querySelectorAll('[data-calc]').forEach(button => {
   button.addEventListener('click', () => {
-    const actions = { vent: calculateVentilation, pipe: calculatePipeSize, high: calculateHighPressurePipe, chimney: calculateChimney, meter: calculateMeter, meterG25: calculateMeterG25 };
+    const actions = { vent: calculateVentilation, pipe: calculatePipeSize, high: calculateHighPressurePipe, chimney: calculateChimney, meter: calculateMeter };
     actions[button.dataset.calc]?.();
   });
 });
