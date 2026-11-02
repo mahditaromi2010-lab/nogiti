@@ -87,9 +87,14 @@
   }
 
   const map = L.map('coverageMap', { scrollWheelZoom: false }).setView([27.2, 56.5], 8);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors',
-    maxZoom: 18
+  // Using CARTO's free basemap tiles (OSM data, redistributed under CARTO's more permissive
+  // usage policy) instead of tile.openstreetmap.org directly — OSM's own tile servers now
+  // actively block self-hosted apps that don't register with their heavy-usage policy, which
+  // showed as "403 Access blocked" tiles in production. CARTO's tiles require no API key.
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>',
+    maxZoom: 19,
+    subdomains: 'abcd'
   }).addTo(map);
   mapEl.addEventListener('click', () => map.scrollWheelZoom.enable(), { once: true });
 
