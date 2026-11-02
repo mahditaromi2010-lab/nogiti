@@ -10,6 +10,7 @@
   "nav.adminLogout": "Admin log out",
   "nav.language": "Language",
   "nav.support": "Support",
+  "nav.coverageMap": "Hormozgan Map",
 
   "footer.quickLinks": "Quick Links",
   "footer.accountSupport": "Account & Support",
@@ -77,6 +78,6 @@
   "admin.team.active": "Shown on the site",
   "admin.team.empty": "No team members yet.",
 
-  "about.team.heading": "Meet the Nogiti team",
+  "about.team.heading": "Meet the Novingity team",
   "about.team.kicker": "OUR TEAM"
 }

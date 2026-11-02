@@ -1,0 +1,13 @@
+<%# Signature brand motif: a schematic "gas flow / piping" divider line with joint nodes, echoing
+    pressure-gauge engineering drawings. Reused across page heroes (home, tools, shop, about, coverage-map)
+    as the one visual idea tying the UI/UX refresh together (item 2). Draws itself in on first scroll into
+    view via public/js/motion.js; prefers-reduced-motion shows it fully drawn immediately (see styles.css). %>
+<div class="flow-divider" aria-hidden="true">
+  <svg class="flow-divider-svg" viewBox="0 0 640 28" preserveAspectRatio="none" focusable="false">
+    <line class="flow-line" x1="4" y1="14" x2="636" y2="14"></line>
+    <circle class="flow-node" cx="60" cy="14" r="5"></circle>
+    <circle class="flow-node" cx="320" cy="14" r="6"></circle>
+    <circle class="flow-node" cx="580" cy="14" r="5"></circle>
+    <path class="flow-tick" d="M60 4 V24 M320 2 V26 M580 4 V24"></path>
+  </svg>
+</div>

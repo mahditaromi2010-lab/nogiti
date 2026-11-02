@@ -281,10 +281,34 @@ function calculateMeter() {
 }
 
 
+// G2.5 meter calculator: a small rules table (mirrors src/lib/meter-rules.js) instead of one hard-coded
+// if-statement, so a future meter type/rule can be added by appending a row here (and server-side).
+const METER_RULES = [
+  { type: 'G2.5', min: 0.1, max: 4, pipeLengthCm: 11, pipeDiameterInch: 1, spacingCm: 10, heightCmMin: 180, heightCmMax: 220 }
+];
+function calculateMeterG25() {
+  const c = parseFloat(document.getElementById('meterG25Consumption').value);
+  const res = document.getElementById('meterG25Result');
+  if (isNaN(c) || c <= 0) { res.innerHTML = 'لطفاً یک مصرف معتبر وارد کنید.'; res.classList.add('show'); return; }
+  const rule = METER_RULES.find(r => c >= r.min && c <= r.max);
+  if (!rule) {
+    res.innerHTML = `⚠️ این مقدار مصرف (${c} مترمکعب بر ساعت) هنوز در جدول قوانین این ابزار پوشش داده نشده است؛ مشخصاتی نمایش داده نمی‌شود تا داده نادرست ارائه نشود.`;
+    res.classList.add('show'); return;
+  }
+  res.innerHTML = `
+      <strong>رده کنتور:</strong> ${rule.type}<br>
+      <strong>طول لوله جانشین:</strong> ${rule.pipeLengthCm} cm<br>
+      <strong>قطر لوله جانشین:</strong> ${rule.pipeDiameterInch}"<br>
+      <strong>فاصله:</strong> ${rule.spacingCm} cm<br>
+      <strong>ارتفاع:</strong> ${rule.heightCmMin} cm الی ${rule.heightCmMax} cm
+  `;
+  res.classList.add('show');
+}
+
 // Accessible button and live conversion bindings (no inline JavaScript required).
 document.querySelectorAll('[data-calc]').forEach(button => {
   button.addEventListener('click', () => {
-    const actions = { vent: calculateVentilation, pipe: calculatePipeSize, high: calculateHighPressurePipe, chimney: calculateChimney, meter: calculateMeter };
+    const actions = { vent: calculateVentilation, pipe: calculatePipeSize, high: calculateHighPressurePipe, chimney: calculateChimney, meter: calculateMeter, meterG25: calculateMeterG25 };
     actions[button.dataset.calc]?.();
   });
 });

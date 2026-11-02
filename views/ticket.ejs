@@ -6,7 +6,7 @@
     <div class="ticket-thread">
       <% messages.forEach(m => { %>
       <div class="ticket-message ticket-message-<%= m.author_type %>">
-        <div class="ticket-message-head"><b><%= m.author_type === 'admin' ? 'پشتیبانی Nogiti' : 'شما' %></b><time><%= new Date(m.created_at).toLocaleString('fa-IR', { dateStyle: 'medium', timeStyle: 'short' }) %></time></div>
+        <div class="ticket-message-head"><b><%= m.author_type === 'admin' ? 'پشتیبانی Novingity' : 'شما' %></b><time><%= new Date(m.created_at).toLocaleString('fa-IR', { dateStyle: 'medium', timeStyle: 'short' }) %></time></div>
         <p><%= m.body %></p>
       </div>
       <% }) %>

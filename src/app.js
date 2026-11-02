@@ -22,6 +22,7 @@ const { digitsEnglish, normalizeIranMobile, normalizeText, isValidEmail } = requ
 const { logger: defaultLogger } = require('./lib/logger');
 const { listMigrations } = require('./lib/migrations');
 const { i18nMiddleware, resolveLocale, DEFAULT_LOCALE, LOCALE_COOKIE } = require('./lib/i18n');
+const { filterCoverageAreas, summarizeCoverageAreas } = require('./lib/coverage-filter');
 
 // Versions shipped with this build; read once at start-up.
 const EXPECTED_MIGRATIONS = listMigrations().map(m => m.version);
@@ -52,7 +53,7 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
   const PRIVATE_DIR = path.join(UPLOAD_DIR, 'private');
   const MAX_UPLOAD_MB = Math.max(1, Number(process.env.MAX_UPLOAD_MB || 100));
   const SECRET = process.env.APP_SECRET || 'local-development-only-change-this-secret';
-  let settingsCache = { site_name: 'Nogiti', site_tagline: 'ابزارهای مهندسی و آموزش تخصصی تأسیسات' };
+  let settingsCache = { site_name: 'Novingity', site_tagline: 'ابزارهای مهندسی و آموزش تخصصی تأسیسات' };
   const throttle = new PgThrottle(pool, SECRET);
   const dummyAdminHashPromise = bcrypt.hash('invalid-login-dummy-password', 12);
 
@@ -188,7 +189,7 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
     };
     res.locals.csrfToken = { toString: csrfToken, valueOf: csrfToken, toJSON: csrfToken };
     res.locals.money = money;
-    res.locals.siteName = settingsCache.site_name || 'Nogiti';
+    res.locals.siteName = settingsCache.site_name || 'Novingity';
     res.locals.siteTagline = settingsCache.site_tagline || 'مهندسی با اطمینان';
     res.locals.siteEmail = settingsCache.contact_email || '';
     res.locals.currentUser = null;
@@ -406,7 +407,8 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
   async function removeCoverIfUnused(oldPath, newPath) {
     if (!oldPath || oldPath === newPath || !/^\/media\/covers\/[A-Za-z0-9-]+\.(?:jpg|png|webp|gif)$/.test(oldPath)) return;
     const used = await pool.query(`SELECT (SELECT COUNT(*) FROM products WHERE cover_image=$1) + (SELECT COUNT(*) FROM articles WHERE cover_image=$1)
-      + (SELECT COUNT(*) FROM article_images WHERE image_path=$1) AS n`, [oldPath]);
+      + (SELECT COUNT(*) FROM article_images WHERE image_path=$1) + (SELECT COUNT(*) FROM product_gallery_images WHERE image_path=$1)
+      + (SELECT COUNT(*) FROM product_demo_steps WHERE image_path=$1) AS n`, [oldPath]);
     if (Number(used.rows[0].n) === 0) await fs.promises.rm(path.join(COVERS_DIR, path.basename(oldPath)), { force: true });
   }
   const intInRange = (value, min, max, fallback) => {
@@ -454,7 +456,15 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
       owned = !!own.rowCount;
     }
     const assets = await pool.query('SELECT id,title,asset_kind,is_preview,sort_order FROM product_assets WHERE product_id=$1 ORDER BY sort_order,id', [product.id]);
-    res.render('product', { title: product.title, product, assets: assets.rows, owned });
+    let gallery = [], demoSteps = [];
+    if (product.product_type === 'plugin') {
+      const [g, d] = await Promise.all([
+        pool.query('SELECT id,image_path,caption FROM product_gallery_images WHERE product_id=$1 ORDER BY sort_order,id', [product.id]),
+        pool.query('SELECT id,title,body,image_path FROM product_demo_steps WHERE product_id=$1 ORDER BY sort_order,id', [product.id])
+      ]);
+      gallery = g.rows; demoSteps = d.rows;
+    }
+    res.render('product', { title: product.title, product, assets: assets.rows, owned, gallery, demoSteps });
   }));
   app.get('/articles', asyncRoute(async (req, res) => {
     const { where, params, q } = buildWhere({ q: req.query.q, searchColumns: ['title', 'excerpt', 'category'], base: ["status='published'"] });
@@ -471,9 +481,112 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
   }));
   app.get('/about', asyncRoute(async (req, res) => {
     const [settings, team] = await Promise.all([getSettings(), pool.query('SELECT * FROM team_members WHERE is_active ORDER BY display_order,id')]);
-    res.render('about', { title: 'درباره Nogiti', settings, teamMembers: team.rows });
+    res.render('about', { title: 'درباره Novingity', settings, teamMembers: team.rows });
   }));
   app.get('/tools', (_req, res) => res.render('tools', { title: 'ابزارهای تأسیسات' }));
+
+  // ───────────── Hormozgan coverage map (demo data; item 7) ─────────────
+  // One clean read function so a future real data source (admin CRUD, an external system) can replace the
+  // DEMO rows without the map frontend or /api/coverage-areas route changing.
+  const REQUEST_TYPE_LABELS = {
+    engineering_consultation: 'مشاوره مهندسی', gas_engineering_assessment: 'ارزیابی مهندسی گاز',
+    feasibility_study: 'امکان‌سنجی پروژه', existing_condition_survey: 'برداشت وضع موجود',
+    architectural_survey: 'برداشت نقشه معماری', engineering_design: 'طراحی و محاسبات مهندسی',
+    technical_review: 'بازبینی فنی', other: 'سایر'
+  };
+  const PROJECT_STATUS_FORM_LABELS = { existing_building: 'ساختمان موجود', under_construction: 'در حال ساخت', planned_project: 'پروژه برنامه‌ریزی‌شده', renovation: 'بازسازی', other: 'سایر' };
+  const CONTACT_METHOD_LABELS = { phone: 'تماس تلفنی', sms: 'پیامک', whatsapp: 'واتس‌اپ', email: 'ایمیل' };
+  function mapCoverageRow(r) {
+    return {
+      id: r.id, projectName: r.project_name, province: r.province, city: r.city, district: r.district,
+      lat: Number(r.lat), lng: Number(r.lng), approximateLocation: r.approximate_location_label,
+      projectCount: Number(r.project_count), serviceType: r.service_type, projectStatus: r.project_status,
+      gasServiceStatus: r.gas_service_status, riserInstallationStatus: r.riser_installation_status,
+      riserLocations: r.riser_locations_identified, plannedExpansion: r.planned_expansion,
+      description: r.description, isDemo: r.is_demo, lastUpdated: r.last_updated
+    };
+  }
+  async function readCoverageAreas() {
+    const r = await pool.query('SELECT * FROM coverage_areas ORDER BY city, id');
+    return r.rows.map(mapCoverageRow);
+  }
+  app.get('/coverage-map', asyncRoute(async (req, res) => {
+    const areas = await readCoverageAreas();
+    res.render('coverage-map', {
+      title: 'نقشه پروژه‌ها و محدوده خدمات نوین گیتی در هرمزگان',
+      metaDescription: 'محدوده پروژه‌ها، خدمات مهندسی و وضعیت بررسی مناطق در هرمزگان را مشاهده کنید و برای بررسی تخصصی یا مشاوره درخواست ثبت کنید.',
+      areas, cities: [...new Set(areas.map(a => a.city))].sort(),
+      requestTypeLabels: REQUEST_TYPE_LABELS, projectStatusFormLabels: PROJECT_STATUS_FORM_LABELS, contactMethodLabels: CONTACT_METHOD_LABELS,
+      formValues: {}, formErrors: {}
+    });
+  }));
+  // Same read function the page itself renders from server-side, exposed as JSON so the map's client-side
+  // filters/search work over the live dataset without a full page reload.
+  app.get('/api/coverage-areas', asyncRoute(async (req, res) => {
+    const areas = await readCoverageAreas();
+    const filtered = filterCoverageAreas(areas, { city: req.query.city, status: req.query.status, gasService: req.query.gasService, riser: req.query.riser, search: req.query.q });
+    res.json({ areas: filtered, summary: summarizeCoverageAreas(filtered) });
+  }));
+
+  // ───────────── Engineering consultation requests (item 8; linked to the coverage map) ─────────────
+  const CONSULTATION_REQUEST_TYPES = Object.keys(REQUEST_TYPE_LABELS);
+  const CONSULTATION_PROJECT_STATUSES = Object.keys(PROJECT_STATUS_FORM_LABELS);
+  const CONSULTATION_CONTACT_METHODS = Object.keys(CONTACT_METHOD_LABELS);
+  app.post('/consultation-requests', asyncRoute(async (req, res) => {
+    const fullName = normalizeText(req.body.full_name, 160);
+    const mobileRaw = String(req.body.mobile || '');
+    const mobile = normalizeIranMobile(mobileRaw);
+    const contactMethod = CONSULTATION_CONTACT_METHODS.includes(req.body.contact_method) ? req.body.contact_method : 'phone';
+    const province = normalizeText(req.body.province, 100) || 'هرمزگان';
+    const city = normalizeText(req.body.city, 120);
+    const district = normalizeText(req.body.district, 120);
+    const coverageAreaId = /^[1-9]\d*$/.test(String(req.body.coverage_area_id || '')) ? Number(req.body.coverage_area_id) : null;
+    const projectType = normalizeText(req.body.project_type, 160);
+    const projectAddress = normalizeText(req.body.project_address, 400);
+    const projectDescription = normalizeText(req.body.project_description, 3000);
+    const requestType = CONSULTATION_REQUEST_TYPES.includes(req.body.request_type) ? req.body.request_type : 'other';
+    const projectStatus = CONSULTATION_PROJECT_STATUSES.includes(req.body.project_status) ? req.body.project_status : 'other';
+    const notes = normalizeText(req.body.notes, 2000);
+    const preferredContactTime = normalizeText(req.body.preferred_contact_time, 120);
+    const errors = {};
+    if (!fullName) errors.full_name = 'نام و نام خانوادگی الزامی است.';
+    if (!mobile) errors.mobile = 'شمارهٔ موبایل معتبر نیست؛ نمونهٔ درست: 09121234567';
+    if (!city) errors.city = 'شهر الزامی است.';
+    if (!projectDescription) errors.project_description = 'توضیح مختصر پروژه الزامی است.';
+    if (Object.keys(errors).length) {
+      const areas = await readCoverageAreas();
+      res.locals.flash = { type: 'error', message: 'لطفاً خطاهای مشخص‌شدهٔ فرم را برطرف کنید.' };
+      return res.status(422).render('coverage-map', {
+        title: 'نقشه پروژه‌ها و محدوده خدمات نوین گیتی در هرمزگان',
+        metaDescription: 'محدوده پروژه‌ها، خدمات مهندسی و وضعیت بررسی مناطق در هرمزگان را مشاهده کنید و برای بررسی تخصصی یا مشاوره درخواست ثبت کنید.',
+        areas, cities: [...new Set(areas.map(a => a.city))].sort(),
+        requestTypeLabels: REQUEST_TYPE_LABELS, projectStatusFormLabels: PROJECT_STATUS_FORM_LABELS, contactMethodLabels: CONTACT_METHOD_LABELS,
+        formValues: { full_name: fullName, mobile: mobileRaw, contact_method: contactMethod, province, city, district, coverage_area_id: coverageAreaId || '', project_type: projectType, project_address: projectAddress, project_description: projectDescription, request_type: requestType, project_status: projectStatus, notes, preferred_contact_time: preferredContactTime },
+        formErrors: errors
+      });
+    }
+    const saved = await pool.query(
+      `INSERT INTO consultation_requests(full_name,mobile,contact_method,province,city,district,coverage_area_id,project_type,project_address,project_description,request_type,project_status,notes,preferred_contact_time)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id`,
+      [fullName, mobile, contactMethod, province, city, district, coverageAreaId, projectType, projectAddress, projectDescription, requestType, projectStatus, notes, preferredContactTime]
+    );
+    const reference = `CR-${saved.rows[0].id}`;
+    setFlash(req, 'success', `درخواست شما با موفقیت ثبت شد. شمارهٔ پیگیری: ${reference}. کارشناسان نوین گیتی به‌زودی با شما تماس می‌گیرند.`);
+    res.redirect('/coverage-map');
+  }));
+  app.get('/admin/consultation-requests', requireAdmin, asyncRoute(async (req, res) => {
+    const status = ['new', 'reviewing', 'contacted', 'closed'].includes(req.query.status) ? req.query.status : '';
+    const { where, params } = buildWhere({ filters: [['status', status]] });
+    const r = await pool.query(`SELECT * FROM consultation_requests ${where} ORDER BY created_at DESC LIMIT 200`, params);
+    res.render('admin/consultation-requests', { title: 'درخواست‌های مشاوره مهندسی', requests: r.rows, filters: { status }, requestTypeLabels: REQUEST_TYPE_LABELS, projectStatusFormLabels: PROJECT_STATUS_FORM_LABELS, contactMethodLabels: CONTACT_METHOD_LABELS });
+  }));
+  app.post('/admin/consultation-requests/:id/status', requireAdmin, asyncRoute(async (req, res) => {
+    const status = ['new', 'reviewing', 'contacted', 'closed'].includes(req.body.status) ? req.body.status : null;
+    if (!status) { setFlash(req, 'error', 'وضعیت نامعتبر است.'); return res.redirect('/admin/consultation-requests'); }
+    const r = await pool.query('UPDATE consultation_requests SET status=$1,updated_at=NOW() WHERE id=$2 RETURNING id', [status, req.params.id]);
+    setFlash(req, r.rowCount ? 'success' : 'error', r.rowCount ? 'وضعیت درخواست به‌روزرسانی شد.' : 'این درخواست پیدا نشد.');
+    res.redirect('/admin/consultation-requests');
+  }));
 
   // ───────────── OTP authentication ─────────────
   const otpHash = (phone, code) => crypto.createHash('sha256').update(`${phone}:${code}:${process.env.APP_SECRET || 'dev'}`).digest('hex');
@@ -491,7 +604,7 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
     if (recent.rowCount) { setFlash(req, 'info', 'برای این شماره اخیراً کد صادر شده است؛ یک دقیقه صبر کنید.'); return res.redirect('/login'); }
     const code = String(crypto.randomInt(100000, 1000000));
     await pool.query('INSERT INTO otp_codes(phone,code_hash,expires_at) VALUES($1,$2,NOW()+INTERVAL \'5 minutes\')', [phone, otpHash(phone, code)]);
-    const message = `کد ورود Nogiti: ${code}\nاعتبار: ۵ دقیقه`;
+    const message = `کد ورود Novingity: ${code}\nاعتبار: ۵ دقیقه`;
     if (process.env.KAVENEGAR_API_KEY) {
       try {
         const body = new URLSearchParams({ receptor: phone, message });
@@ -927,7 +1040,7 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
     const r = await pool.query(`SELECT p.*, (SELECT COUNT(*)::int FROM product_assets a WHERE a.product_id=p.id) AS asset_count FROM products p ${where} ORDER BY p.updated_at DESC, p.id DESC LIMIT ${pg.pageSize} OFFSET ${pg.offset}`, params);
     res.render('admin/products', { title: 'مدیریت محصولات', products: r.rows, filters: { q, status, type }, pg });
   }));
-  app.get('/admin/products/new', requireAdmin, (_req, res) => res.render('admin/product-form', { title: 'محصول جدید', product: null, assets: [], maxUploadMb: MAX_UPLOAD_MB }));
+  app.get('/admin/products/new', requireAdmin, (_req, res) => res.render('admin/product-form', { title: 'محصول جدید', product: null, assets: [], gallery: [], demoSteps: [], maxUploadMb: MAX_UPLOAD_MB }));
   const readProductForm = req => ({
     title: normalizeText(req.body.title, 180),
     type: ['course', 'plugin'].includes(req.body.product_type) ? req.body.product_type : null,
@@ -936,21 +1049,29 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
     titleEn: normalizeText(req.body.title_en, 180),
     subtitleEn: normalizeText(req.body.subtitle_en, 240),
     shortDescriptionEn: normalizeText(req.body.short_description_en, 500),
-    descriptionEn: normalizeText(req.body.description_en, 20000)
+    descriptionEn: normalizeText(req.body.description_en, 20000),
+    // Plugin-only rich content (item 5); harmless/unused for product_type='course'.
+    demoVideoUrl: isHttpsUrl(normalizeText(req.body.demo_video_url, 1000)) ? normalizeText(req.body.demo_video_url, 1000) : '',
+    usageGuideIntro: normalizeText(req.body.usage_guide_intro, 4000)
   });
   app.post('/admin/products', requireAdmin, coverUpload.single('cover'), multipartCsrf, verifyUploads(imagePolicy, '/admin/products/new'), asyncRoute(async (req, res) => {
     const form = readProductForm(req);
     if (!form.title || !Number.isSafeInteger(form.price) || form.price < 100) { removeUploaded(req); setFlash(req, 'error', 'عنوان و قیمت معتبر (حداقل ۱۰۰ تومان) الزامی است.'); return res.redirect('/admin/products/new'); }
     const slug = await uniqueSlug('products', normalizeText(req.body.slug, 160) || form.title);
     const cover = acceptableCoverValue(req.file, req.body.cover_url);
-    const saved = await pool.query(`INSERT INTO products(slug,title,subtitle,product_type,category,short_description,description,price_toman,cover_image,status,featured,title_en,subtitle_en,short_description_en,description_en)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id`, [slug, form.title, normalizeText(req.body.subtitle, 240), form.type || 'course', normalizeText(req.body.category, 100), normalizeText(req.body.short_description, 500), normalizeText(req.body.description, 20000), form.price, cover, form.status, req.body.featured === 'on', form.titleEn, form.subtitleEn, form.shortDescriptionEn, form.descriptionEn]);
+    const saved = await pool.query(`INSERT INTO products(slug,title,subtitle,product_type,category,short_description,description,price_toman,cover_image,status,featured,title_en,subtitle_en,short_description_en,description_en,demo_video_url,usage_guide_intro)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING id`, [slug, form.title, normalizeText(req.body.subtitle, 240), form.type || 'course', normalizeText(req.body.category, 100), normalizeText(req.body.short_description, 500), normalizeText(req.body.description, 20000), form.price, cover, form.status, req.body.featured === 'on', form.titleEn, form.subtitleEn, form.shortDescriptionEn, form.descriptionEn, form.demoVideoUrl, form.usageGuideIntro]);
     setFlash(req, 'success', 'محصول ساخته شد. حالا می‌توانید محتوا و فایل‌هایش را اضافه کنید.'); res.redirect(`/admin/products/${saved.rows[0].id}/edit`);
   }));
   app.get('/admin/products/:id/edit', requireAdmin, asyncRoute(async (req, res) => {
-    const [p, a] = await Promise.all([pool.query('SELECT * FROM products WHERE id=$1', [req.params.id]), pool.query('SELECT * FROM product_assets WHERE product_id=$1 ORDER BY sort_order,id', [req.params.id])]);
+    const [p, a, g, d] = await Promise.all([
+      pool.query('SELECT * FROM products WHERE id=$1', [req.params.id]),
+      pool.query('SELECT * FROM product_assets WHERE product_id=$1 ORDER BY sort_order,id', [req.params.id]),
+      pool.query('SELECT * FROM product_gallery_images WHERE product_id=$1 ORDER BY sort_order,id', [req.params.id]),
+      pool.query('SELECT * FROM product_demo_steps WHERE product_id=$1 ORDER BY sort_order,id', [req.params.id])
+    ]);
     if (!p.rowCount) return renderError(res, 404, 'محصول پیدا نشد', 'این محصول وجود ندارد.');
-    res.render('admin/product-form', { title: 'ویرایش محصول', product: p.rows[0], assets: a.rows, maxUploadMb: MAX_UPLOAD_MB });
+    res.render('admin/product-form', { title: 'ویرایش محصول', product: p.rows[0], assets: a.rows, gallery: g.rows, demoSteps: d.rows, maxUploadMb: MAX_UPLOAD_MB });
   }));
   app.post('/admin/products/:id/edit', requireAdmin, coverUpload.single('cover'), multipartCsrf, verifyUploads(imagePolicy, req => `/admin/products/${req.params.id}/edit`), asyncRoute(async (req, res) => {
     const existing = await pool.query('SELECT * FROM products WHERE id=$1', [req.params.id]);
@@ -959,7 +1080,7 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
     if (!form.title || !Number.isSafeInteger(form.price) || form.price < 100) { removeUploaded(req); setFlash(req, 'error', 'عنوان و قیمت معتبر (حداقل ۱۰۰ تومان) الزامی است.'); return res.redirect(`/admin/products/${req.params.id}/edit`); }
     const slug = await uniqueSlug('products', normalizeText(req.body.slug, 160) || form.title, req.params.id);
     const cover = acceptableCoverValue(req.file, req.body.cover_url) || (req.body.cover_url === '' && req.body.remove_cover === 'on' ? '' : existing.rows[0].cover_image);
-    await pool.query(`UPDATE products SET slug=$1,title=$2,subtitle=$3,product_type=$4,category=$5,short_description=$6,description=$7,price_toman=$8,cover_image=$9,status=$10,featured=$11,title_en=$12,subtitle_en=$13,short_description_en=$14,description_en=$15,updated_at=NOW() WHERE id=$16`, [slug, form.title, normalizeText(req.body.subtitle, 240), form.type || existing.rows[0].product_type, normalizeText(req.body.category, 100), normalizeText(req.body.short_description, 500), normalizeText(req.body.description, 20000), form.price, cover, form.status, req.body.featured === 'on', form.titleEn, form.subtitleEn, form.shortDescriptionEn, form.descriptionEn, req.params.id]);
+    await pool.query(`UPDATE products SET slug=$1,title=$2,subtitle=$3,product_type=$4,category=$5,short_description=$6,description=$7,price_toman=$8,cover_image=$9,status=$10,featured=$11,title_en=$12,subtitle_en=$13,short_description_en=$14,description_en=$15,demo_video_url=$16,usage_guide_intro=$17,updated_at=NOW() WHERE id=$18`, [slug, form.title, normalizeText(req.body.subtitle, 240), form.type || existing.rows[0].product_type, normalizeText(req.body.category, 100), normalizeText(req.body.short_description, 500), normalizeText(req.body.description, 20000), form.price, cover, form.status, req.body.featured === 'on', form.titleEn, form.subtitleEn, form.shortDescriptionEn, form.descriptionEn, form.demoVideoUrl, form.usageGuideIntro, req.params.id]);
     await removeCoverIfUnused(existing.rows[0].cover_image, cover);
     setFlash(req, 'success', 'محصول به‌روزرسانی شد.'); res.redirect(`/admin/products/${req.params.id}/edit`);
   }));
@@ -987,6 +1108,39 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
   app.post('/admin/products/:id/delete', requireAdmin, asyncRoute(async (req, res) => {
     const r = await pool.query("UPDATE products SET status='archived',updated_at=NOW() WHERE id=$1 RETURNING id", [req.params.id]);
     setFlash(req, r.rowCount ? 'success' : 'error', r.rowCount ? 'محصول آرشیو شد. برای حفظ سوابق سفارش‌ها، حذف فیزیکی انجام نشد.' : 'محصول پیدا نشد.'); res.redirect('/admin/products');
+  }));
+
+  // ───────────── Plugin product content: gallery images + usage/demo steps (item 5) ─────────────
+  app.post('/admin/products/:id/gallery', requireAdmin, coverUpload.single('image'), multipartCsrf, verifyUploads(imagePolicy, req => `/admin/products/${req.params.id}/edit`), asyncRoute(async (req, res) => {
+    const back = `/admin/products/${req.params.id}/edit`;
+    const product = await pool.query('SELECT id FROM products WHERE id=$1', [req.params.id]);
+    if (!product.rowCount) { removeUploaded(req); return renderError(res, 404, 'محصول پیدا نشد', 'این محصول وجود ندارد.'); }
+    const imagePath = acceptableCoverValue(req.file, req.body.image_url);
+    if (!imagePath) { removeUploaded(req); setFlash(req, 'error', 'یک تصویر یا نشانی معتبر لازم است.'); return res.redirect(back); }
+    const sortOrder = intInRange(req.body.sort_order, -100000, 100000, 0);
+    await pool.query('INSERT INTO product_gallery_images(product_id,image_path,caption,sort_order) VALUES($1,$2,$3,$4)', [req.params.id, imagePath, normalizeText(req.body.caption, 300), sortOrder]);
+    setFlash(req, 'success', 'تصویر به گالری اضافه شد.'); res.redirect(back);
+  }));
+  app.post('/admin/gallery/:id/delete', requireAdmin, asyncRoute(async (req, res) => {
+    const r = await pool.query('DELETE FROM product_gallery_images WHERE id=$1 RETURNING product_id,image_path', [req.params.id]);
+    if (r.rowCount) await removeCoverIfUnused(r.rows[0].image_path, '');
+    setFlash(req, r.rowCount ? 'success' : 'error', r.rowCount ? 'تصویر حذف شد.' : 'این تصویر پیدا نشد.'); res.redirect(r.rowCount ? `/admin/products/${r.rows[0].product_id}/edit` : '/admin/products');
+  }));
+  app.post('/admin/products/:id/demo-steps', requireAdmin, coverUpload.single('image'), multipartCsrf, verifyUploads(imagePolicy, req => `/admin/products/${req.params.id}/edit`), asyncRoute(async (req, res) => {
+    const back = `/admin/products/${req.params.id}/edit`;
+    const product = await pool.query('SELECT id FROM products WHERE id=$1', [req.params.id]);
+    if (!product.rowCount) { removeUploaded(req); return renderError(res, 404, 'محصول پیدا نشد', 'این محصول وجود ندارد.'); }
+    const title = normalizeText(req.body.title, 200);
+    if (!title) { removeUploaded(req); setFlash(req, 'error', 'عنوان مرحله الزامی است.'); return res.redirect(back); }
+    const imagePath = acceptableCoverValue(req.file, req.body.image_url);
+    const sortOrder = intInRange(req.body.sort_order, -100000, 100000, 0);
+    await pool.query('INSERT INTO product_demo_steps(product_id,title,body,image_path,sort_order) VALUES($1,$2,$3,$4,$5)', [req.params.id, title, normalizeText(req.body.body, 2000), imagePath, sortOrder]);
+    setFlash(req, 'success', 'مرحلهٔ راهنما اضافه شد.'); res.redirect(back);
+  }));
+  app.post('/admin/demo-steps/:id/delete', requireAdmin, asyncRoute(async (req, res) => {
+    const r = await pool.query('DELETE FROM product_demo_steps WHERE id=$1 RETURNING product_id,image_path', [req.params.id]);
+    if (r.rowCount && r.rows[0].image_path) await removeCoverIfUnused(r.rows[0].image_path, '');
+    setFlash(req, r.rowCount ? 'success' : 'error', r.rowCount ? 'مرحله حذف شد.' : 'این مرحله پیدا نشد.'); res.redirect(r.rowCount ? `/admin/products/${r.rows[0].product_id}/edit` : '/admin/products');
   }));
 
   // ───────────── Articles ─────────────

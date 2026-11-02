@@ -275,3 +275,141 @@ html[dir="ltr"] .asset-row,html[dir="ltr"] .library-item,html[dir="ltr"] .row-ac
 .admin-content input:focus-visible,.admin-content select:focus-visible,.auth-form a:focus-visible,
 .auth-form button:focus-visible,.auth-form input:focus-visible,.lang-option:focus-visible{outline:3px solid var(--emerald-light);outline-offset:3px}
 @media (prefers-reduced-motion:reduce){.button,.product-card,.article-card,.tool-card,.team-card,a.stat-card{transition:none}}
+
+/* ======================================================================================
+   2026-11 additions (Novingity release): brand motif + motion system, G2.5 tool reuse,
+   Hormozgan coverage map, consultation form, plugin product content, about empty state.
+   Written as readable new rules (the rest of this file is a minified baseline) so later
+   edits here stay easy to diff; nothing above this point is modified.
+   ====================================================================================== */
+
+/* ---------- Motion / reveal utilities (item 2) ---------- */
+.reveal-on-scroll { opacity: 0; transform: translateY(18px); transition: opacity .6s ease, transform .6s ease; }
+.reveal-on-scroll.is-visible { opacity: 1; transform: none; }
+.reveal-stagger .reveal-item { opacity: 0; transform: translateY(16px); transition: opacity .55s ease, transform .55s ease; transition-delay: calc(var(--i, 0) * 70ms); }
+.reveal-stagger .reveal-item.is-visible { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  .reveal-on-scroll, .reveal-stagger .reveal-item { opacity: 1; transform: none; transition: none; }
+}
+
+/* Card hover lift + button micro-interactions (purposeful, not generic): a small rise + shadow, and on
+   primary buttons a brief light "flow" sweep echoing the pipe/flow motif below. */
+.product-card, .calculator-card, .team-card, .summary-card, a.stat-card {
+  transition: transform .25s ease, box-shadow .25s ease;
+}
+.product-card:hover, .calculator-card:hover, .team-card:hover, .summary-card:hover, a.stat-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 18px 40px rgba(11, 46, 38, .14);
+}
+.button { position: relative; overflow: hidden; transition: transform .18s ease, box-shadow .18s ease, background-color .2s ease; }
+.button:hover { transform: translateY(-2px); }
+.button:active { transform: translateY(0) scale(.98); }
+.button-primary::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(100deg, transparent 30%, rgba(255,255,255,.35) 48%, transparent 66%);
+  transform: translateX(-120%); transition: transform .6s ease;
+}
+.button-primary:hover::after { transform: translateX(120%); }
+@media (prefers-reduced-motion: reduce) {
+  .product-card, .calculator-card, .team-card, .summary-card, a.stat-card, .button, .button-primary::after { transition: none !important; transform: none !important; }
+}
+
+/* ---------- Signature brand motif: schematic flow/pipe divider ---------- */
+.flow-divider { width: 100%; max-width: 640px; margin: 28px auto; padding: 0 16px; }
+.flow-divider-svg { width: 100%; height: 22px; display: block; overflow: visible; }
+.flow-line { stroke: var(--emerald); stroke-width: 2; stroke-dasharray: 640; stroke-dashoffset: 640; transition: stroke-dashoffset 1.1s ease; }
+.flow-node { fill: var(--paper); stroke: var(--emerald); stroke-width: 2; opacity: 0; transition: opacity .4s ease .7s; }
+.flow-tick { stroke: var(--line); stroke-width: 1; opacity: 0; transition: opacity .4s ease .9s; }
+.flow-divider-svg.is-visible .flow-line { stroke-dashoffset: 0; }
+.flow-divider-svg.is-visible .flow-node, .flow-divider-svg.is-visible .flow-tick { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .flow-line { stroke-dashoffset: 0; transition: none; }
+  .flow-node, .flow-tick { opacity: 1; transition: none; }
+}
+
+/* Blueprint/schematic grid texture used behind hero sections: faint measurement grid + corner ticks,
+   the same engineering-drawing idea carried by the flow-divider above. */
+.page-hero, .map-hero, .tools-hero {
+  position: relative;
+  background-image:
+    linear-gradient(rgba(16,185,129,.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(16,185,129,.06) 1px, transparent 1px);
+  background-size: 34px 34px;
+  background-position: center top;
+}
+.page-hero::before, .map-hero::before, .tools-hero::before,
+.page-hero::after, .map-hero::after, .tools-hero::after {
+  content: ""; position: absolute; width: 22px; height: 22px; pointer-events: none; opacity: .5;
+  border-color: var(--emerald); border-style: solid; border-width: 0;
+}
+.page-hero::before, .map-hero::before, .tools-hero::before { top: 18px; inset-inline-start: 18px; border-top-width: 2px; border-inline-start-width: 2px; }
+.page-hero::after, .map-hero::after, .tools-hero::after { bottom: 18px; inset-inline-end: 18px; border-bottom-width: 2px; border-inline-end-width: 2px; }
+
+/* ---------- Demo-data disclaimer banner (coverage map) ---------- */
+.demo-disclaimer { background: #fff7ed; border: 1px solid #f59e0b; }
+.demo-disclaimer span { background: #f59e0b; }
+
+/* ---------- Hormozgan coverage map (item 7) ---------- */
+.map-summary-section { padding-top: 0; }
+.summary-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 18px; }
+.summary-card { background: var(--white); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; display: flex; flex-direction: column; gap: 8px; }
+.summary-card-label { font-size: 12.5px; color: var(--muted); font-weight: 600; }
+.summary-card strong { font-size: 28px; color: var(--teal); font-variant-numeric: tabular-nums; }
+.map-results-line { margin: 4px 0 18px; font-size: 13.5px; }
+.map-filters { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin-bottom: 16px; background: var(--white); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; }
+.map-filters .form-field { min-width: 160px; flex: 1 1 160px; }
+.map-filters #resetFilters { flex-shrink: 0; }
+.map-legend { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 16px; font-size: 13px; color: var(--ink-2); }
+.legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.legend-dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; border: 2px solid var(--teal); }
+.legend-green { background: #10b981; }
+.legend-orange { background: #f59e0b; }
+.legend-blue { background: #2563eb; }
+.legend-gray { background: #9ca3af; }
+.map-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: 18px; align-items: start; }
+.coverage-map-canvas { width: 100%; height: 460px; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line); box-shadow: var(--shadow); z-index: 0; }
+.map-info-panel { background: var(--white); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; min-height: 200px; position: sticky; top: 100px; }
+.map-info-empty { text-align: center; color: var(--muted); padding: 30px 10px; }
+.map-info-empty span { display: block; font-size: 26px; margin-bottom: 8px; }
+.map-info-card h3 { margin: 0 0 2px; }
+.map-info-location { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+.map-info-list { display: grid; gap: 8px; margin: 0 0 12px; }
+.map-info-list > div { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; border-bottom: 1px dashed var(--line); padding-bottom: 6px; }
+.map-info-list dt { color: var(--muted); }
+.map-info-list dd { margin: 0; font-weight: 600; }
+.map-info-desc { font-size: 13px; color: var(--ink-2); }
+.map-info-demo-note { font-size: 12px; color: #b45309; background: #fff7ed; border-radius: 10px; padding: 8px 10px; }
+@media (max-width: 900px) {
+  .map-layout { grid-template-columns: 1fr; }
+  .summary-cards { grid-template-columns: repeat(2, 1fr); }
+  .map-info-panel { position: static; }
+  .coverage-map-canvas { height: 360px; }
+}
+
+/* ---------- Consultation request form (item 8) ---------- */
+.consultation-section { background: var(--mint); border-radius: var(--radius); padding: 30px 0 36px; margin-top: 10px; }
+.consultation-request-form { background: var(--white); border-radius: var(--radius); padding: 24px; box-shadow: var(--shadow); max-width: 980px; margin: 0 auto; }
+.privacy-note { font-size: 12.5px; color: var(--muted); background: var(--paper); border: 1px dashed var(--line); border-radius: 12px; padding: 10px 14px; margin: 6px 0 16px; }
+.field-error { display: block; color: #b91c1c; font-size: 12px; margin-top: 4px; }
+
+/* ---------- Plugin product content (item 5) ---------- */
+.plugin-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin: 0 0 24px; }
+.plugin-gallery-item { margin: 0; border-radius: 14px; overflow: hidden; border: 1px solid var(--line); background: var(--white); }
+.plugin-gallery-item img { width: 100%; height: 110px; object-fit: cover; display: block; }
+.plugin-gallery-item figcaption { font-size: 11.5px; color: var(--muted); padding: 6px 8px; }
+.demo-video-link { margin: 10px 0 18px; }
+.demo-steps-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.demo-step { background: var(--paper); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; }
+.demo-step-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.demo-step-num { width: 26px; height: 26px; border-radius: 50%; background: var(--emerald); color: var(--white); display: grid; place-items: center; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+.demo-step h3 { margin: 0; font-size: 15px; }
+.demo-step img { margin-top: 8px; border-radius: 10px; max-width: 320px; }
+
+/* ---------- Admin: consultation requests row details (smooth accordion, item 2) ---------- */
+.row-details summary { cursor: pointer; font-size: 12.5px; color: var(--teal-2); font-weight: 600; list-style: none; }
+.row-details summary::-webkit-details-marker { display: none; }
+.row-details > div { overflow: hidden; transition: max-height .3s ease; }
+.status-update-form { margin-top: 10px; display: flex; gap: 8px; align-items: center; }
+
+/* ---------- About page empty state polish (item 4) ---------- */
+.section-team .empty-state.empty-compact { margin: 0 auto; max-width: 420px; }

@@ -144,7 +144,7 @@ test('Persian search keeps digits and folds them; ISO-BMFF stills are not videos
 
 test('migrations are ordered, named consistently and have reviewed rollbacks where reversible', () => {
   const list = listMigrations();
-  assert.deepEqual(list.map(m => m.version), ['0001', '0002', '0003', '0004', '0005']);
+  assert.deepEqual(list.map(m => m.version), ['0001', '0002', '0003', '0004', '0005', '0006', '0007', '0008', '0009']);
   assert.equal(list[0].downPath, null, 'baseline is restore-from-backup only');
   for (const m of list.slice(1)) assert.ok(m.downPath, `${m.name} should have a reviewed .down.sql`);
   // "ON DELETE CASCADE"/"ON DELETE SET NULL" are normal FK clauses, not destructive statements.

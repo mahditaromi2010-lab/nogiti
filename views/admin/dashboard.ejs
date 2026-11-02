@@ -1,5 +1,5 @@
 <%- include('../partials/header', {title}) %><div class="admin-shell"><%- include('../partials/admin-nav') %><div class="admin-content">
-<div class="admin-topbar"><div><span class="section-kicker">OVERVIEW / Nogiti</span><h1>نمای کلی سایت</h1><p>اعداد مستقیماً از پایگاه داده خوانده می‌شوند؛ فروش فقط شامل سفارش‌هایی است که پرداختشان در سرور تأیید شده است.</p></div><a href="/" class="button button-outline button-small">مشاهده سایت ↗</a></div>
+<div class="admin-topbar"><div><span class="section-kicker">OVERVIEW / Novingity</span><h1>نمای کلی سایت</h1><p>اعداد مستقیماً از پایگاه داده خوانده می‌شوند؛ فروش فقط شامل سفارش‌هایی است که پرداختشان در سرور تأیید شده است.</p></div><a href="/" class="button button-outline button-small">مشاهده سایت ↗</a></div>
 <% const fa = n => Number(n || 0).toLocaleString('fa-IR'); %>
 <div class="admin-stats">
   <a class="stat-card" href="/admin/users?state=active"><span>کاربران فعال</span><b><%= fa(counts.active_users) %></b><small><%= fa(counts.new_users_30d) %> عضو جدید در ۳۰ روز اخیر</small><span class="stat-icon" aria-hidden="true">♙</span></a>

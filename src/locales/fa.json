@@ -10,6 +10,7 @@
   "nav.adminLogout": "خروج مدیر",
   "nav.language": "زبان",
   "nav.support": "پشتیبانی",
+  "nav.coverageMap": "نقشه هرمزگان",
 
   "footer.quickLinks": "دسترسی سریع",
   "footer.accountSupport": "حساب و پشتیبانی",
@@ -77,6 +78,6 @@
   "admin.team.active": "نمایش در سایت",
   "admin.team.empty": "هنوز عضوی ثبت نشده است.",
 
-  "about.team.heading": "با تیم Nogiti آشنا شوید",
+  "about.team.heading": "با تیم Novingity آشنا شوید",
   "about.team.kicker": "OUR TEAM"
 }

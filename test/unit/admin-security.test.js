@@ -14,6 +14,13 @@ test('admin paths map to the expected server-side permission', () => {
   assert.equal(permissionForPath('/admin/account/credentials'), 'self');
   assert.equal(permissionForPath('/admin/logout'), 'self');
   assert.equal(permissionForPath('/admin'), 'overview');
+  // New in this release (items 5, 7, 8): plugin gallery/demo-step management follows 'content',
+  // the coverage-map area admin section follows 'content', consultation requests follow 'support'.
+  assert.equal(permissionForPath('/admin/gallery/4/delete'), 'content');
+  assert.equal(permissionForPath('/admin/demo-steps/4/delete'), 'content');
+  assert.equal(permissionForPath('/admin/coverage-areas'), 'coverage');
+  assert.equal(permissionForPath('/admin/consultation-requests'), 'consultation');
+  assert.equal(permissionForPath('/admin/consultation-requests/4/status'), 'consultation');
 });
 
 test('least-privilege role matrix blocks unrelated management areas', () => {

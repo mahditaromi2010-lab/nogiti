@@ -7,10 +7,12 @@ const ROLE_LABELS = Object.freeze({ owner: 'مدیر اصلی', admin: 'مدیر
 // 'support' (ticket access) is granted to the broad admin roles only (owner, admin), the same way
 // 'audit' and 'settings' already are - it is not split into its own admin_accounts role, following the
 // existing pattern of adding a capability to the permission map rather than growing the role enum.
+// 'coverage' (Hormozgan coverage-map demo data) follows the 'content' pattern; 'consultation' (engineering
+// consultation requests tied to the coverage map) follows the 'support' pattern, same reasoning as above.
 const rolePermissions = Object.freeze({
-  owner: new Set(['overview', 'content', 'orders', 'users', 'settings', 'audit', 'admins', 'support', 'self']),
-  admin: new Set(['overview', 'content', 'orders', 'users', 'settings', 'audit', 'support', 'self']),
-  content: new Set(['content', 'self']),
+  owner: new Set(['overview', 'content', 'orders', 'users', 'settings', 'audit', 'admins', 'support', 'coverage', 'consultation', 'self']),
+  admin: new Set(['overview', 'content', 'orders', 'users', 'settings', 'audit', 'support', 'coverage', 'consultation', 'self']),
+  content: new Set(['content', 'coverage', 'self']),
   orders: new Set(['orders', 'self']),
   users: new Set(['users', 'self'])
 });
@@ -23,12 +25,14 @@ function permissionForPath(pathname) {
   const section = path[0] || 'overview';
   if (section === 'admins') return 'admins';
   if (section === 'account' || section === 'logout') return 'self';
-  if (section === 'products' || section === 'articles' || section === 'article-images' || section === 'assets' || section === 'team') return 'content';
+  if (section === 'products' || section === 'articles' || section === 'article-images' || section === 'assets' || section === 'team' || section === 'gallery' || section === 'demo-steps') return 'content';
   if (section === 'orders') return 'orders';
   if (section === 'users') return 'users';
   if (section === 'settings') return 'settings';
   if (section === 'audit') return 'audit';
   if (section === 'tickets') return 'support';
+  if (section === 'coverage-areas') return 'coverage';
+  if (section === 'consultation-requests') return 'consultation';
   return 'overview';
 }
 

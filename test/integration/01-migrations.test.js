@@ -11,7 +11,8 @@ test('migrations on PostgreSQL', { skip: skipReason, concurrency: false }, async
   const pool = newPool();
   t.after(() => pool.end());
 
-  const ALL_MIGRATIONS = ['0001_baseline', '0002_hardening', '0003_team_members', '0004_bilingual_content', '0005_support_tickets'];
+  const ALL_MIGRATIONS = ['0001_baseline', '0002_hardening', '0003_team_members', '0004_bilingual_content', '0005_support_tickets',
+    '0006_brand_rename', '0007_plugin_content', '0008_coverage_map', '0009_consultation_requests'];
 
   await t.test('fresh database: all migrations apply, re-run is a no-op', async () => {
     await resetDatabase(pool);
@@ -19,9 +20,13 @@ test('migrations on PostgreSQL', { skip: skipReason, concurrency: false }, async
     assert.deepEqual(ran, ALL_MIGRATIONS);
     assert.deepEqual(await migrateUp(pool), []);
     const tables = (await pool.query("SELECT table_name FROM information_schema.tables WHERE table_schema='public'")).rows.map(r => r.table_name);
-    for (const t of ['users', 'products', 'orders', 'admin_accounts', 'admin_audit_logs', 'rate_limit_hits', 'web_sessions', 'schema_migrations', 'team_members', 'tickets', 'ticket_messages']) assert.ok(tables.includes(t), t);
+    for (const t of ['users', 'products', 'orders', 'admin_accounts', 'admin_audit_logs', 'rate_limit_hits', 'web_sessions', 'schema_migrations', 'team_members', 'tickets', 'ticket_messages',
+      'product_gallery_images', 'product_demo_steps', 'coverage_areas', 'consultation_requests']) assert.ok(tables.includes(t), t);
     const productColumns = (await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name='products'")).rows.map(r => r.column_name);
-    for (const c of ['title_en', 'subtitle_en', 'short_description_en', 'description_en']) assert.ok(productColumns.includes(c), c);
+    for (const c of ['title_en', 'subtitle_en', 'short_description_en', 'description_en', 'demo_video_url', 'usage_guide_intro']) assert.ok(productColumns.includes(c), c);
+    assert.equal((await pool.query("SELECT setting_value FROM site_settings WHERE setting_key='site_name'")).rows[0].setting_value, 'Novingity', 'brand rename applied on fresh install');
+    const demoAreas = (await pool.query('SELECT COUNT(*)::int n FROM coverage_areas WHERE is_demo')).rows[0].n;
+    assert.ok(demoAreas >= 5, 'demo coverage-map seed data present');
     const s = await status(pool);
     assert.ok(s.every(m => m.applied && !m.checksumMismatch));
   });
@@ -42,10 +47,17 @@ test('migrations on PostgreSQL', { skip: skipReason, concurrency: false }, async
     assert.equal((await pool.query("SELECT setting_value FROM site_settings WHERE setting_key='site_name'")).rows[0].setting_value, 'نام سفارشی', 'custom site name preserved');
   });
 
-  await t.test('rollback of 0003-0005 and 0002 is reversible and keeps user data', async () => {
+  await t.test('rollback of 0009-0002 is reversible and keeps user data', async () => {
     await pool.query("INSERT INTO rate_limit_hits(key_hash) VALUES(repeat('a',64))");
     await pool.query("INSERT INTO team_members(name) VALUES('نمونه')");
     // Only the most recently applied migration can be rolled back; roll them off in reverse order.
+    assert.equal(await migrateDown(pool, '0009'), '0009_consultation_requests');
+    assert.equal((await pool.query("SELECT to_regclass('public.consultation_requests') AS t")).rows[0].t, null);
+    assert.equal(await migrateDown(pool, '0008'), '0008_coverage_map');
+    assert.equal((await pool.query("SELECT to_regclass('public.coverage_areas') AS t")).rows[0].t, null);
+    assert.equal(await migrateDown(pool, '0007'), '0007_plugin_content');
+    assert.equal((await pool.query("SELECT to_regclass('public.product_demo_steps') AS t")).rows[0].t, null);
+    assert.equal(await migrateDown(pool, '0006'), '0006_brand_rename');
     assert.equal(await migrateDown(pool, '0005'), '0005_support_tickets');
     assert.equal((await pool.query("SELECT to_regclass('public.tickets') AS t")).rows[0].t, null);
     assert.equal(await migrateDown(pool, '0004'), '0004_bilingual_content');
@@ -57,7 +69,8 @@ test('migrations on PostgreSQL', { skip: skipReason, concurrency: false }, async
     assert.equal((await pool.query("SELECT to_regclass('public.rate_limit_hits') AS t")).rows[0].t, null);
     assert.equal(Number((await pool.query('SELECT COUNT(*) n FROM users')).rows[0].n), 2);
     await assert.rejects(migrateDown(pool, '0001'), /no reviewed \.down\.sql|Only the most recently applied/);
-    assert.deepEqual(await migrateUp(pool), ['0002_hardening', '0003_team_members', '0004_bilingual_content', '0005_support_tickets']);
+    assert.deepEqual(await migrateUp(pool), ['0002_hardening', '0003_team_members', '0004_bilingual_content', '0005_support_tickets',
+      '0006_brand_rename', '0007_plugin_content', '0008_coverage_map', '0009_consultation_requests']);
   });
 
   await t.test('an edited, already-applied migration is detected', async () => {

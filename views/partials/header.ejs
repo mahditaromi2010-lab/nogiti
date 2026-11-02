@@ -4,17 +4,18 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#0b2e26">
-  <!-- Nogiti site icons -->
+  <!-- Novingity site icons -->
   <link rel="icon" href="/public/favicon.ico" sizes="any">
   <link rel="icon" type="image/png" sizes="48x48" href="/public/favicon-48x48.png">
   <link rel="icon" type="image/png" sizes="32x32" href="/public/favicon-32x32.png">
   <link rel="apple-touch-icon" href="/public/apple-touch-icon.png">
   <link rel="manifest" href="/public/site.webmanifest">
-  <meta name="description" content="Nogiti؛ ابزارهای مهندسی تأسیسات، آموزش تخصصی، دوره‌های کاربردی و افزونه‌های اتوکد.">
+  <meta name="description" content="<%= typeof metaDescription !== 'undefined' && metaDescription ? metaDescription : 'Novingity؛ ابزارهای مهندسی تأسیسات، آموزش تخصصی، دوره‌های کاربردی و افزونه‌های اتوکد.' %>">
   <title><%= title ? `${title} | ${siteName}` : `${siteName} | ابزارهای مهندسی و آموزش تأسیسات` %></title>
   <link rel="preload" href="/public/fonts/Vazirmatn-Variable.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/public/css/styles.css">
   <script defer src="/public/js/main.js"></script>
+  <script defer src="/public/js/motion.js"></script>
 </head>
 <body>
 <a class="skip-link" href="#main-content">پرش به محتوای اصلی</a>
@@ -26,6 +27,7 @@
       <a href="/tools"><%= t('nav.tools') %></a>
       <a href="/shop"><%= t('nav.shop') %></a>
       <a href="/articles"><%= t('nav.articles') %></a>
+      <a href="/coverage-map"><%= t('nav.coverageMap') %></a>
       <a href="/about"><%= t('nav.about') %></a>
       <% if (currentUser) { %><a href="/account/tickets"><%= t('nav.support') %></a><% } %>
       <% if (currentAdmin) { %><a href="<%= can('overview') ? '/admin' : (roleHome || '/admin/account') %>" class="nav-admin"><%= t('nav.admin') %></a><% } %>

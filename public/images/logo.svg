@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160">
+  <defs>
+    <linearGradient id="tileGrad" x1="0" y1="0" x2="160" y2="160" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0b2e26"/>
+      <stop offset="1" stop-color="#047857"/>
+    </linearGradient>
+    <linearGradient id="markGrad" x1="28" y1="34" x2="132" y2="126" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6ee7b7"/>
+      <stop offset="1" stop-color="#10b981"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="152" height="152" rx="36" fill="url(#tileGrad)"/>
+  <rect x="4" y="4" width="152" height="152" rx="36" fill="none" stroke="#10b981" stroke-opacity="0.35" stroke-width="2"/>
+  <!-- Abstract mark: a stylised "N" built from a single flowing pipe/valve line (echoes the site's
+       flow-divider motif), not a literal 3D letterform. Engineering/piping identity, emerald only. -->
+  <g fill="none" stroke="url(#markGrad)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M40 118 V46 L120 118 V46"/>
+  </g>
+  <circle cx="40" cy="46" r="7.5" fill="#eafff5" stroke="url(#markGrad)" stroke-width="4"/>
+  <circle cx="120" cy="46" r="7.5" fill="#eafff5" stroke="url(#markGrad)" stroke-width="4"/>
+  <circle cx="80" cy="82" r="6" fill="#0b2e26" stroke="#eafff5" stroke-width="2.5"/>
+  <!-- Small measurement ticks, same corner-tick language used on page heroes -->
+  <path d="M18 24 V34 M18 24 H28 M132 136 V126 M132 136 H122" stroke="#10b981" stroke-opacity="0.55" stroke-width="3" stroke-linecap="round"/>
+</svg>

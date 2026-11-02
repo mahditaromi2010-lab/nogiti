@@ -1,0 +1,39 @@
+<%- include('../partials/header', {title}) %><div class="admin-shell"><%- include('../partials/admin-nav') %><div class="admin-content">
+<div class="admin-topbar"><div><span class="section-kicker">ENGINEERING CONSULTATION</span><h1>درخواست‌های مشاوره مهندسی</h1><p>درخواست‌های ثبت‌شده از فرم مشاوره/نقشهٔ هرمزگان؛ اطلاعات تماس فقط در همین پنل قابل مشاهده است.</p></div></div>
+<section class="admin-panel">
+  <form class="filter-bar" method="get" action="/admin/consultation-requests" role="search">
+    <div class="filter-field"><label for="f-status">وضعیت پیگیری</label><select class="form-control" id="f-status" name="status"><option value="">همه</option><% ['new','reviewing','contacted','closed'].forEach(s => { %><option value="<%= s %>" <%= filters.status===s?'selected':'' %>><%= { new: 'جدید', reviewing: 'در حال بررسی', contacted: 'تماس گرفته‌شده', closed: 'بسته‌شده' }[s] %></option><% }) %></select></div>
+    <div class="filter-actions"><button class="button button-dark button-small" type="submit">اعمال</button><% if (filters.status) { %><a class="button button-quiet button-small" href="/admin/consultation-requests">حذف فیلتر</a><% } %></div>
+  </form>
+  <div class="table-responsive"><table class="data-table"><caption class="sr-only">درخواست‌های مشاوره مهندسی</caption><thead><tr><th scope="col">#</th><th scope="col">نام</th><th scope="col">موبایل</th><th scope="col">شهر</th><th scope="col">نوع درخواست</th><th scope="col">وضعیت</th><th scope="col">تاریخ</th><th scope="col"></th></tr></thead><tbody>
+  <% requests.forEach(r => { %><tr>
+    <td>CR-<%= r.id %></td>
+    <td><%= r.full_name %></td>
+    <td dir="ltr"><%= r.mobile %></td>
+    <td><%= r.city %><% if (r.district) { %><small class="table-sub"><%= r.district %></small><% } %></td>
+    <td><%= requestTypeLabels[r.request_type] || r.request_type %></td>
+    <td><span class="status-pill status-ticket-<%= r.status==='closed'?'closed':(r.status==='new'?'open':'pending') %>"><%= { new: 'جدید', reviewing: 'در حال بررسی', contacted: 'تماس گرفته‌شده', closed: 'بسته‌شده' }[r.status] %></span></td>
+    <td><%= new Date(r.created_at).toLocaleDateString('fa-IR') %></td>
+    <td>
+      <details class="row-details"><summary>جزئیات</summary>
+        <div class="row-details-body">
+          <p><b>روش تماس:</b> <%= contactMethodLabels[r.contact_method] || r.contact_method %></p>
+          <p><b>وضعیت پروژه:</b> <%= projectStatusFormLabels[r.project_status] || r.project_status %></p>
+          <% if (r.project_address) { %><p><b>آدرس:</b> <%= r.project_address %></p><% } %>
+          <p><b>توضیح پروژه:</b> <%= r.project_description %></p>
+          <% if (r.notes) { %><p><b>یادداشت:</b> <%= r.notes %></p><% } %>
+          <% if (r.preferred_contact_time) { %><p><b>زمان ترجیحی تماس:</b> <%= r.preferred_contact_time %></p><% } %>
+          <form action="/admin/consultation-requests/<%= r.id %>/status" method="post" class="inline-form status-update-form">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <select class="form-control" name="status">
+              <% ['new','reviewing','contacted','closed'].forEach(s => { %><option value="<%= s %>" <%= r.status===s?'selected':'' %>><%= { new: 'جدید', reviewing: 'در حال بررسی', contacted: 'تماس گرفته‌شده', closed: 'بسته‌شده' }[s] %></option><% }) %>
+            </select>
+            <button class="button button-outline button-small" type="submit">به‌روزرسانی وضعیت</button>
+          </form>
+        </div>
+      </details>
+    </td>
+  </tr><% }) %>
+  <% if (!requests.length) { %><tr><td colspan="8" class="table-empty">هنوز درخواستی ثبت نشده است.</td></tr><% } %>
+  </tbody></table></div>
+</section></div></div><%- include('../partials/footer') %>
