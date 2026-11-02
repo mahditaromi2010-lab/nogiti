@@ -152,6 +152,28 @@ test('engineering consultation requests: public submission, validation, referenc
     await limited.adminLogin('orders_only', PW);
     assert.equal((await limited.get('/admin/consultation-requests')).status, 403);
   });
+
+  await t.test('a photo attached to the request (same upload mechanism as product/team photos) is stored and shown to admins', async () => {
+    const r = await multipart(visitor, '/consultation-requests', {
+      full_name: 'سارا احمدی', mobile: '09351234567', city: 'بندرعباس', project_description: 'ضمیمهٔ عکس محل پروژه'
+    }, 'attachment', PNG, 'site.png', 'image/png', '/coverage-map');
+    assert.equal(r.status, 302, 'redirects back to the coverage map on success');
+    const row = (await pool.query('SELECT attachment_path FROM consultation_requests WHERE full_name=$1', ['سارا احمدی'])).rows[0];
+    assert.match(row.attachment_path, /^\/media\/covers\/[0-9a-f-]+\.png$/, 'stored under the same /media/covers convention as product covers/team photos');
+    const admin = new Client(srv.base);
+    await admin.adminLogin('owner_consult', PW);
+    const list = await admin.get('/admin/consultation-requests');
+    assert.match(list.text, new RegExp(row.attachment_path.replace(/\//g, '\\/')), 'the uploaded file is surfaced in the admin view');
+  });
+
+  await t.test('a non-image attachment (magic-byte sniffed) is rejected the same way product cover uploads are, and nothing is saved', async () => {
+    const fakeImage = Buffer.from('<html><script>alert(1)</script></html>');
+    const r = await multipart(visitor, '/consultation-requests', {
+      full_name: 'رد شده', mobile: '09351234567', city: 'بندرعباس', project_description: 'پیوست نامعتبر'
+    }, 'attachment', fakeImage, 'fake.png', 'image/png', '/coverage-map');
+    assert.equal(r.status, 302, 'verifyUploads redirects back with a flash error rather than crashing');
+    assert.equal((await pool.query('SELECT COUNT(*)::int n FROM consultation_requests WHERE full_name=$1', ['رد شده'])).rows[0].n, 0, 'no row written when the upload is rejected');
+  });
 });
 
 test('About us team roster (item 4): empty state, full admin CRUD, public page end-to-end', { skip: skipReason, concurrency: false }, async t => {
@@ -257,5 +279,116 @@ test('Hormozgan coverage map: public page, JSON data endpoint, demo-data disclai
     for (const area of data.areas) {
       if (area.gasServiceStatus !== 'installed') assert.notEqual(area.gasServiceStatus, undefined);
     }
+  });
+});
+
+test('Hormozgan coverage-map admin CRUD (follow-up): add/edit/delete areas, public page and JSON endpoint reflect the admin-edited data, permission enforcement', { skip: skipReason, concurrency: false }, async t => {
+  const pool = newPool();
+  await resetDatabase(pool);
+  await migrateUp(pool);
+  await createAdmin(pool, 'content_coverage', PW, 'content');
+  const srv = await startApp({ pool });
+  t.after(async () => { await srv.stop(); await pool.end(); });
+  const admin = new Client(srv.base);
+  await admin.adminLogin('content_coverage', PW);
+  const visitor = new Client(srv.base);
+
+  await t.test('the admin list page renders the seeded demo rows', async () => {
+    const r = await admin.get('/admin/coverage-areas');
+    assert.equal(r.status, 200);
+    assert.match(r.text, /بندرعباس/);
+  });
+
+  let areaId;
+  await t.test('admin adds a new coverage area, which immediately appears on the public map and JSON endpoint', async () => {
+    const r = await admin.postWithCsrf('/admin/coverage-areas', {
+      project_name: 'پروژهٔ آزمایشی ادمین', province: 'هرمزگان', city: 'شهر جدید', district: 'ناحیهٔ یک',
+      lat: '27.1865', lng: '56.2808', approximate_location_label: 'شهر جدید - مرکز (تقریبی)',
+      project_count: '3', service_type: 'ارزیابی مهندسی گاز', project_status: 'planned', gas_service_status: 'planned',
+      riser_installation_status: 'not_installed', riser_locations_identified: 'on', planned_expansion: 'on',
+      description: 'رکورد ایجادشده توسط تست یکپارچگی.'
+      // is_demo intentionally omitted: readCoverageForm() must default it to false when the checkbox is unchecked.
+    }, '/admin/coverage-areas/new');
+    assert.equal(r.status, 302, 'redirects back to the list on success');
+    const row = (await pool.query('SELECT * FROM coverage_areas WHERE project_name=$1', ['پروژهٔ آزمایشی ادمین'])).rows[0];
+    assert.ok(row, 'row was actually written to coverage_areas');
+    areaId = row.id;
+    assert.equal(Number(row.lat), 27.1865);
+    assert.equal(Number(row.lng), 56.2808);
+    assert.equal(row.project_status, 'planned');
+    assert.equal(row.is_demo, false, 'unchecked is_demo checkbox is stored as false, not defaulted to true');
+
+    const publicPage = await visitor.get('/coverage-map');
+    assert.match(publicPage.text, /پروژهٔ آزمایشی ادمین/, 'the public page is sourced live from coverage_areas, no route change needed');
+    const api = await visitor.get('/api/coverage-areas');
+    const data = JSON.parse(api.text);
+    assert.ok(data.areas.some(a => a.projectName === 'پروژهٔ آزمایشی ادمین'), 'the JSON endpoint reflects the admin-added row too');
+  });
+
+  await t.test('admin edits the area and the change is reflected everywhere the data is read from', async () => {
+    const r = await admin.postWithCsrf(`/admin/coverage-areas/${areaId}/edit`, {
+      project_name: 'پروژهٔ آزمایشی ادمین - ویرایش‌شده', province: 'هرمزگان', city: 'شهر جدید', district: 'ناحیهٔ یک',
+      lat: '27.2', lng: '56.3', project_count: '5', service_type: 'طراحی و محاسبات مهندسی', project_status: 'completed',
+      gas_service_status: 'installed', riser_installation_status: 'installed', description: 'به‌روزرسانی شد.', is_demo: 'on'
+    }, `/admin/coverage-areas/${areaId}/edit`);
+    assert.equal(r.status, 302);
+    const row = (await pool.query('SELECT * FROM coverage_areas WHERE id=$1', [areaId])).rows[0];
+    assert.equal(row.project_name, 'پروژهٔ آزمایشی ادمین - ویرایش‌شده');
+    assert.equal(row.project_status, 'completed');
+    assert.equal(row.gas_service_status, 'installed');
+    assert.equal(row.is_demo, true, 'checked is_demo checkbox is stored as true on edit');
+    const publicPage = await visitor.get('/coverage-map');
+    assert.match(publicPage.text, /پروژهٔ آزمایشی ادمین - ویرایش‌شده/);
+  });
+
+  await t.test('editing with missing required fields re-renders the form with an error and leaves the row unchanged', async () => {
+    const before = (await pool.query('SELECT project_name FROM coverage_areas WHERE id=$1', [areaId])).rows[0];
+    const r = await admin.postWithCsrf(`/admin/coverage-areas/${areaId}/edit`, { project_name: '', city: '', lat: '', lng: '' }, `/admin/coverage-areas/${areaId}/edit`);
+    assert.equal(r.status, 302);
+    const after = (await pool.query('SELECT project_name FROM coverage_areas WHERE id=$1', [areaId])).rows[0];
+    assert.equal(after.project_name, before.project_name, 'invalid submission does not overwrite the existing row');
+  });
+
+  await t.test('admin deletes the area; a linked consultation request keeps existing but loses the reference (ON DELETE SET NULL)', async () => {
+    const token = await visitor.csrf('/coverage-map');
+    await visitor.post('/consultation-requests', { _csrf: token, full_name: 'مرجع‌دار', mobile: '09121112233', city: 'شهر جدید', coverage_area_id: String(areaId), project_description: 'وابسته به منطقه' });
+    const linked = (await pool.query('SELECT id FROM consultation_requests WHERE full_name=$1', ['مرجع‌دار'])).rows[0];
+    assert.ok(linked, 'the consultation request referencing this area was saved');
+
+    const r = await admin.postWithCsrf(`/admin/coverage-areas/${areaId}/delete`, {}, '/admin/coverage-areas');
+    assert.equal(r.status, 302);
+    assert.equal((await pool.query('SELECT COUNT(*)::int n FROM coverage_areas WHERE id=$1', [areaId])).rows[0].n, 0, 'the area row is gone');
+    const stillThere = (await pool.query('SELECT coverage_area_id FROM consultation_requests WHERE id=$1', [linked.id])).rows[0];
+    assert.equal(stillThere.coverage_area_id, null, 'the consultation request itself is kept; only its reference is cleared');
+
+    const api = await visitor.get('/api/coverage-areas');
+    const data = JSON.parse(api.text);
+    assert.ok(!data.areas.some(a => a.id === areaId), 'the deleted area no longer appears on the public map/JSON endpoint');
+  });
+
+  await t.test('deleting (or editing) a non-existent area id fails gracefully, not with a 500', async () => {
+    const del = await admin.postWithCsrf('/admin/coverage-areas/999999/delete', {}, '/admin/coverage-areas');
+    assert.equal(del.status, 302);
+    const edit = await admin.get('/admin/coverage-areas/999999/edit');
+    assert.equal(edit.status, 404);
+  });
+
+  await t.test('a role without the content/coverage permission cannot reach any coverage-areas admin route (list, new, edit, delete)', async () => {
+    await createAdmin(pool, 'orders_coverage', PW, 'orders');
+    const limited = new Client(srv.base);
+    await limited.adminLogin('orders_coverage', PW);
+    const remaining = (await pool.query('SELECT id FROM coverage_areas ORDER BY id LIMIT 1')).rows[0].id;
+    assert.equal((await limited.get('/admin/coverage-areas')).status, 403);
+    assert.equal((await limited.get('/admin/coverage-areas/new')).status, 403);
+    assert.equal((await limited.get(`/admin/coverage-areas/${remaining}/edit`)).status, 403);
+    assert.equal((await limited.post(`/admin/coverage-areas/${remaining}/delete`, { _csrf: 'x' })).status, 403);
+  });
+
+  await t.test('an unauthenticated visitor is blocked (not a database error) for every coverage-areas admin route', async () => {
+    const anon = new Client(srv.base);
+    const remaining = (await pool.query('SELECT id FROM coverage_areas ORDER BY id LIMIT 1')).rows[0].id;
+    assert.equal((await anon.get('/admin/coverage-areas')).status, 403);
+    assert.equal((await anon.get('/admin/coverage-areas/new')).status, 403);
+    assert.equal((await anon.get(`/admin/coverage-areas/${remaining}/edit`)).status, 403);
   });
 });

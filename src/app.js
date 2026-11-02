@@ -532,7 +532,7 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
   const CONSULTATION_REQUEST_TYPES = Object.keys(REQUEST_TYPE_LABELS);
   const CONSULTATION_PROJECT_STATUSES = Object.keys(PROJECT_STATUS_FORM_LABELS);
   const CONSULTATION_CONTACT_METHODS = Object.keys(CONTACT_METHOD_LABELS);
-  app.post('/consultation-requests', asyncRoute(async (req, res) => {
+  app.post('/consultation-requests', coverUpload.single('attachment'), multipartCsrf, verifyUploads(imagePolicy, '/coverage-map#consultation-form'), asyncRoute(async (req, res) => {
     const fullName = normalizeText(req.body.full_name, 160);
     const mobileRaw = String(req.body.mobile || '');
     const mobile = normalizeIranMobile(mobileRaw);
@@ -554,6 +554,7 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
     if (!city) errors.city = 'شهر الزامی است.';
     if (!projectDescription) errors.project_description = 'توضیح مختصر پروژه الزامی است.';
     if (Object.keys(errors).length) {
+      removeUploaded(req);
       const areas = await readCoverageAreas();
       res.locals.flash = { type: 'error', message: 'لطفاً خطاهای مشخص‌شدهٔ فرم را برطرف کنید.' };
       return res.status(422).render('coverage-map', {
@@ -565,10 +566,11 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
         formErrors: errors
       });
     }
+    const attachmentPath = acceptableCoverValue(req.file, '');
     const saved = await pool.query(
-      `INSERT INTO consultation_requests(full_name,mobile,contact_method,province,city,district,coverage_area_id,project_type,project_address,project_description,request_type,project_status,notes,preferred_contact_time)
-       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id`,
-      [fullName, mobile, contactMethod, province, city, district, coverageAreaId, projectType, projectAddress, projectDescription, requestType, projectStatus, notes, preferredContactTime]
+      `INSERT INTO consultation_requests(full_name,mobile,contact_method,province,city,district,coverage_area_id,project_type,project_address,project_description,request_type,project_status,attachment_path,notes,preferred_contact_time)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id`,
+      [fullName, mobile, contactMethod, province, city, district, coverageAreaId, projectType, projectAddress, projectDescription, requestType, projectStatus, attachmentPath, notes, preferredContactTime]
     );
     const reference = `CR-${saved.rows[0].id}`;
     setFlash(req, 'success', `درخواست شما با موفقیت ثبت شد. شمارهٔ پیگیری: ${reference}. کارشناسان نوین گیتی به‌زودی با شما تماس می‌گیرند.`);
@@ -586,6 +588,69 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
     const r = await pool.query('UPDATE consultation_requests SET status=$1,updated_at=NOW() WHERE id=$2 RETURNING id', [status, req.params.id]);
     setFlash(req, r.rowCount ? 'success' : 'error', r.rowCount ? 'وضعیت درخواست به‌روزرسانی شد.' : 'این درخواست پیدا نشد.');
     res.redirect('/admin/consultation-requests');
+  }));
+
+  // ───────────── Admin: Hormozgan coverage-map areas (admin CRUD follow-up for item 7) ─────────────
+  const COVERAGE_PROJECT_STATUSES = ['completed', 'in_progress', 'planned', 'under_review'];
+  const COVERAGE_GAS_STATUSES = ['installed', 'not_installed', 'planned', 'unknown'];
+  const COVERAGE_PROJECT_STATUS_LABELS = { completed: 'تکمیل‌شده', in_progress: 'در حال اجرا', planned: 'برنامه‌ریزی‌شده', under_review: 'در حال بررسی' };
+  const COVERAGE_GAS_STATUS_LABELS = { installed: 'نصب‌شده', not_installed: 'نصب‌نشده', planned: 'برنامه‌ریزی‌شده', unknown: 'نامشخص' };
+  const readCoverageForm = req => ({
+    projectName: normalizeText(req.body.project_name, 200),
+    province: normalizeText(req.body.province, 100) || 'هرمزگان',
+    city: normalizeText(req.body.city, 120),
+    district: normalizeText(req.body.district, 120),
+    lat: Number(digitsEnglish(req.body.lat)),
+    lng: Number(digitsEnglish(req.body.lng)),
+    approximateLocation: normalizeText(req.body.approximate_location_label, 200),
+    projectCount: intInRange(req.body.project_count, 0, 1000000, 0),
+    serviceType: normalizeText(req.body.service_type, 200),
+    projectStatus: COVERAGE_PROJECT_STATUSES.includes(req.body.project_status) ? req.body.project_status : 'under_review',
+    gasServiceStatus: COVERAGE_GAS_STATUSES.includes(req.body.gas_service_status) ? req.body.gas_service_status : 'unknown',
+    riserInstallationStatus: COVERAGE_GAS_STATUSES.includes(req.body.riser_installation_status) ? req.body.riser_installation_status : 'unknown',
+    riserLocations: req.body.riser_locations_identified === 'on',
+    plannedExpansion: req.body.planned_expansion === 'on',
+    description: normalizeText(req.body.description, 2000),
+    isDemo: req.body.is_demo === 'on'
+  });
+  app.get('/admin/coverage-areas', requireAdmin, asyncRoute(async (req, res) => {
+    const r = await pool.query('SELECT * FROM coverage_areas ORDER BY city, id');
+    res.render('admin/coverage-areas', { title: 'مناطق نقشهٔ هرمزگان', areas: r.rows, projectStatusLabels: COVERAGE_PROJECT_STATUS_LABELS, gasStatusLabels: COVERAGE_GAS_STATUS_LABELS });
+  }));
+  app.get('/admin/coverage-areas/new', requireAdmin, (_req, res) => res.render('admin/coverage-area-form', { title: 'منطقهٔ جدید', area: null }));
+  app.post('/admin/coverage-areas', requireAdmin, asyncRoute(async (req, res) => {
+    const form = readCoverageForm(req);
+    if (!form.projectName || !form.city || !Number.isFinite(form.lat) || !Number.isFinite(form.lng)) {
+      setFlash(req, 'error', 'نام پروژه، شهر و مختصات (عرض/طول جغرافیایی) الزامی است.'); return res.redirect('/admin/coverage-areas/new');
+    }
+    await pool.query(
+      `INSERT INTO coverage_areas(project_name,province,city,district,lat,lng,approximate_location_label,project_count,service_type,project_status,gas_service_status,riser_installation_status,riser_locations_identified,planned_expansion,description,is_demo,last_updated)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,NOW())`,
+      [form.projectName, form.province, form.city, form.district, form.lat, form.lng, form.approximateLocation, form.projectCount, form.serviceType, form.projectStatus, form.gasServiceStatus, form.riserInstallationStatus, form.riserLocations, form.plannedExpansion, form.description, form.isDemo]
+    );
+    setFlash(req, 'success', 'منطقه به نقشه اضافه شد.'); res.redirect('/admin/coverage-areas');
+  }));
+  app.get('/admin/coverage-areas/:id/edit', requireAdmin, asyncRoute(async (req, res) => {
+    const r = await pool.query('SELECT * FROM coverage_areas WHERE id=$1', [req.params.id]);
+    if (!r.rowCount) return renderError(res, 404, 'پیدا نشد', 'این منطقه پیدا نشد.');
+    res.render('admin/coverage-area-form', { title: 'ویرایش منطقه', area: r.rows[0] });
+  }));
+  app.post('/admin/coverage-areas/:id/edit', requireAdmin, asyncRoute(async (req, res) => {
+    const existing = await pool.query('SELECT id FROM coverage_areas WHERE id=$1', [req.params.id]);
+    if (!existing.rowCount) return renderError(res, 404, 'پیدا نشد', 'این منطقه پیدا نشد.');
+    const form = readCoverageForm(req);
+    if (!form.projectName || !form.city || !Number.isFinite(form.lat) || !Number.isFinite(form.lng)) {
+      setFlash(req, 'error', 'نام پروژه، شهر و مختصات (عرض/طول جغرافیایی) الزامی است.'); return res.redirect(`/admin/coverage-areas/${req.params.id}/edit`);
+    }
+    await pool.query(
+      `UPDATE coverage_areas SET project_name=$1,province=$2,city=$3,district=$4,lat=$5,lng=$6,approximate_location_label=$7,project_count=$8,service_type=$9,project_status=$10,gas_service_status=$11,riser_installation_status=$12,riser_locations_identified=$13,planned_expansion=$14,description=$15,is_demo=$16,last_updated=NOW(),updated_at=NOW() WHERE id=$17`,
+      [form.projectName, form.province, form.city, form.district, form.lat, form.lng, form.approximateLocation, form.projectCount, form.serviceType, form.projectStatus, form.gasServiceStatus, form.riserInstallationStatus, form.riserLocations, form.plannedExpansion, form.description, form.isDemo, req.params.id]
+    );
+    setFlash(req, 'success', 'منطقه به‌روزرسانی شد.'); res.redirect('/admin/coverage-areas');
+  }));
+  app.post('/admin/coverage-areas/:id/delete', requireAdmin, asyncRoute(async (req, res) => {
+    const r = await pool.query('DELETE FROM coverage_areas WHERE id=$1 RETURNING id', [req.params.id]);
+    setFlash(req, r.rowCount ? 'success' : 'error', r.rowCount ? 'منطقه حذف شد.' : 'این منطقه پیدا نشد.'); res.redirect('/admin/coverage-areas');
   }));
 
   // ───────────── OTP authentication ─────────────

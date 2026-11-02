@@ -12,6 +12,7 @@
       <%- navItem('/admin/products', '▤', 'محصولات و دوره‌ها', at('/admin/products')) %>
       <%- navItem('/admin/articles', '▧', 'مقالات و تصاویر', at('/admin/articles') || at('/admin/article-images')) %>
       <%- navItem('/admin/team', '☺', t('admin.team.title'), at('/admin/team')) %>
+      <%- navItem('/admin/coverage-areas', '◫', 'مناطق نقشهٔ هرمزگان', at('/admin/coverage-areas')) %>
     <% } %>
     <% if (can('orders') || can('users') || can('settings') || can('audit') || can('support')) { %><div class="admin-nav-label">مدیریت سایت</div><% } %>
     <% if (can('orders')) { %><%- navItem('/admin/orders', '◷', 'سفارش‌ها', at('/admin/orders')) %><% } %>

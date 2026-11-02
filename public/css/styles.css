@@ -413,3 +413,6 @@ html[dir="ltr"] .asset-row,html[dir="ltr"] .library-item,html[dir="ltr"] .row-ac
 
 /* ---------- About page empty state polish (item 4) ---------- */
 .section-team .empty-state.empty-compact { margin: 0 auto; max-width: 420px; }
+
+/* ---------- Consultation request attachment thumbnail (admin follow-up) ---------- */
+.attachment-thumb { width: 140px; height: 100px; object-fit: cover; border-radius: 10px; border: 1px solid rgba(0,0,0,.08); }

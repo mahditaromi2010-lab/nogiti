@@ -39,7 +39,7 @@
 
 <section class="section consultation-section" id="consultation-form"><div class="container">
   <div class="section-heading"><div><span class="section-kicker">ENGINEERING CONSULTATION</span><h2>درخواست مشاوره یا ارزیابی مهندسی</h2><p>فرم زیر را تکمیل کنید؛ در صورت انتخاب یک منطقه از نقشه، اطلاعات آن به‌صورت خودکار در فرم پر می‌شود.</p></div></div>
-  <form class="admin-form consultation-request-form" action="/consultation-requests#consultation-form" method="post" data-unsaved-guard>
+  <form class="admin-form consultation-request-form" action="/consultation-requests#consultation-form" method="post" enctype="multipart/form-data" data-unsaved-guard>
     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
     <input type="hidden" name="coverage_area_id" id="field_coverage_area_id" value="<%= formValues.coverage_area_id || '' %>">
     <div class="form-grid">
@@ -56,6 +56,7 @@
       <div class="form-field form-span-2"><label for="field_project_description">توضیح پروژه *</label><textarea class="form-control" id="field_project_description" name="project_description" rows="4" maxlength="3000" required><%= formValues.project_description || '' %></textarea><% if (formErrors.project_description) { %><small class="field-error"><%= formErrors.project_description %></small><% } %></div>
       <div class="form-field form-span-2"><label for="field_notes">توضیحات تکمیلی</label><textarea class="form-control" id="field_notes" name="notes" rows="3" maxlength="2000"><%= formValues.notes || '' %></textarea></div>
       <div class="form-field"><label for="field_preferred_contact_time">زمان ترجیحی تماس</label><input class="form-control" id="field_preferred_contact_time" name="preferred_contact_time" maxlength="120" value="<%= formValues.preferred_contact_time || '' %>" placeholder="مثلاً روزهای کاری، ساعت ۹ تا ۱۴"></div>
+      <div class="form-field form-span-2"><label for="field_attachment">پیوست (عکس محل پروژه یا نقشه)</label><input class="form-control file-control" id="field_attachment" type="file" name="attachment" accept="image/jpeg,image/png,image/webp,image/gif"><small>اختیاری؛ حداکثر ۸ مگابایت؛ JPG، PNG، WebP یا GIF.</small><% if (formErrors.attachment) { %><small class="field-error"><%= formErrors.attachment %></small><% } %></div>
     </div>
     <p class="privacy-note">حریم خصوصی: اطلاعات تماس شما فقط برای بررسی و پاسخ‌گویی به همین درخواست استفاده می‌شود و در هیچ بخش عمومی سایت نمایش داده نمی‌شود.</p>
     <div class="form-actions"><button class="button button-primary button-large" type="submit" data-busy-label="در حال ارسال…">ثبت درخواست مشاوره <span>←</span></button></div>

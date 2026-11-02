@@ -23,6 +23,7 @@
           <p><b>توضیح پروژه:</b> <%= r.project_description %></p>
           <% if (r.notes) { %><p><b>یادداشت:</b> <%= r.notes %></p><% } %>
           <% if (r.preferred_contact_time) { %><p><b>زمان ترجیحی تماس:</b> <%= r.preferred_contact_time %></p><% } %>
+          <% if (r.attachment_path) { %><p><b>پیوست:</b> <a href="<%= r.attachment_path %>" target="_blank" rel="noopener"><img src="<%= r.attachment_path %>" alt="پیوست درخواست <%= r.full_name %>" class="attachment-thumb" loading="lazy" width="140" height="100"></a></p><% } %>
           <form action="/admin/consultation-requests/<%= r.id %>/status" method="post" class="inline-form status-update-form">
             <input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <select class="form-control" name="status">

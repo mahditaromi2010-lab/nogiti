@@ -21,6 +21,12 @@ test('admin paths map to the expected server-side permission', () => {
   assert.equal(permissionForPath('/admin/coverage-areas'), 'coverage');
   assert.equal(permissionForPath('/admin/consultation-requests'), 'consultation');
   assert.equal(permissionForPath('/admin/consultation-requests/4/status'), 'consultation');
+  // Coverage-area admin CRUD follow-up: every sub-path (new/add, edit, delete) must resolve to the same
+  // 'coverage' permission as the list page, since permissionForPath only looks at the first path segment -
+  // this is exactly the class of bug that slipped through for /admin/gallery and /admin/demo-steps before.
+  assert.equal(permissionForPath('/admin/coverage-areas/new'), 'coverage');
+  assert.equal(permissionForPath('/admin/coverage-areas/5/edit'), 'coverage');
+  assert.equal(permissionForPath('/admin/coverage-areas/5/delete'), 'coverage');
 });
 
 test('least-privilege role matrix blocks unrelated management areas', () => {
