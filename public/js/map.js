@@ -6,9 +6,30 @@
   const mapEl = document.getElementById('coverageMap');
   if (!mapEl || typeof L === 'undefined') return;
 
-  const PROJECT_STATUS_LABELS = { completed: 'تکمیل‌شده', in_progress: 'در حال اجرا', planned: 'برنامه‌ریزی‌شده', under_review: 'در حال بررسی' };
-  const GAS_STATUS_LABELS = { installed: 'نصب‌شده', not_installed: 'نصب‌نشده', planned: 'برنامه‌ریزی‌شده', unknown: 'نامشخص' };
-  const RISER_STATUS_LABELS = { installed: 'نصب‌شده', not_installed: 'نصب‌نشده', planned: 'برنامه‌ریزی‌شده', unknown: 'نامشخص' };
+  // Mirrors the fa/en split in src/locales/*.json; locale is set by the page via window.NG_LOCALE
+  // (see views/coverage-map.ejs), same pattern as public/js/tools.js.
+  const MAP_LOCALE = (typeof window !== 'undefined' && window.NG_LOCALE === 'en') ? 'en' : 'fa';
+  const MAP_TEXT = {
+    projectCountLabel: { fa: 'تعداد پروژه (نمونه)', en: 'Project count (sample)' },
+    projectStatusLabel: { fa: 'وضعیت پروژه', en: 'Project status' },
+    gasRiserStatusLabel: { fa: 'وضعیت رایزر گاز', en: 'Gas riser status' },
+    riserInstallLabel: { fa: 'نصب رایزر', en: 'Riser installed' },
+    riserLocationLabel: { fa: 'شناسایی محل رایزر', en: 'Riser location identified' },
+    plannedExpansionLabel: { fa: 'توسعهٔ آتی برنامه‌ریزی‌شده', en: 'Future expansion planned' },
+    servicesLabel: { fa: 'خدمات مهندسی موجود', en: 'Available engineering services' },
+    yes: { fa: 'بله', en: 'Yes' },
+    no: { fa: 'خیر', en: 'No' },
+    demoNote: { fa: '⚠ این رکورد نمونه/آزمایشی است و نشان‌دهندهٔ وضعیت تأییدشدهٔ واقعی نیست.', en: '⚠ This record is sample/preliminary data and does not represent a confirmed, real-world status.' },
+    requestForArea: { fa: 'درخواست مشاوره برای این منطقه', en: 'Request a consultation for this area' }
+  };
+  function mt(key) { return MAP_TEXT[key][MAP_LOCALE]; }
+  const PROJECT_STATUS_LABELS = MAP_LOCALE === 'en'
+    ? { completed: 'Completed', in_progress: 'In progress', planned: 'Planned', under_review: 'Under review' }
+    : { completed: 'تکمیل‌شده', in_progress: 'در حال اجرا', planned: 'برنامه‌ریزی‌شده', under_review: 'در حال بررسی' };
+  const GAS_STATUS_LABELS = MAP_LOCALE === 'en'
+    ? { installed: 'Installed', not_installed: 'Not installed', planned: 'Planned', unknown: 'Unknown' }
+    : { installed: 'نصب‌شده', not_installed: 'نصب‌نشده', planned: 'برنامه‌ریزی‌شده', unknown: 'نامشخص' };
+  const RISER_STATUS_LABELS = GAS_STATUS_LABELS;
 
   function statusColor(area) {
     if (area.gasServiceStatus === 'installed') return '#10b981';
@@ -82,17 +103,17 @@
         <h3>${escapeHtml(area.projectName)}</h3>
         <p class="map-info-location">${escapeHtml(area.city)}${area.district ? ' - ' + escapeHtml(area.district) : ''}</p>
         <dl class="map-info-list">
-          <div><dt>تعداد پروژه (نمونه)</dt><dd>${area.projectCount}</dd></div>
-          <div><dt>وضعیت پروژه</dt><dd>${PROJECT_STATUS_LABELS[area.projectStatus] || area.projectStatus}</dd></div>
-          <div><dt>وضعیت رایزر گاز</dt><dd>${GAS_STATUS_LABELS[area.gasServiceStatus] || area.gasServiceStatus}</dd></div>
-          <div><dt>نصب رایزر</dt><dd>${RISER_STATUS_LABELS[area.riserInstallationStatus] || area.riserInstallationStatus}</dd></div>
-          <div><dt>شناسایی محل رایزر</dt><dd>${area.riserLocations ? 'بله' : 'خیر'}</dd></div>
-          <div><dt>توسعهٔ آتی برنامه‌ریزی‌شده</dt><dd>${area.plannedExpansion ? 'بله' : 'خیر'}</dd></div>
-          <div><dt>خدمات مهندسی موجود</dt><dd>${escapeHtml(area.serviceType || '—')}</dd></div>
+          <div><dt>${mt('projectCountLabel')}</dt><dd>${area.projectCount}</dd></div>
+          <div><dt>${mt('projectStatusLabel')}</dt><dd>${PROJECT_STATUS_LABELS[area.projectStatus] || area.projectStatus}</dd></div>
+          <div><dt>${mt('gasRiserStatusLabel')}</dt><dd>${GAS_STATUS_LABELS[area.gasServiceStatus] || area.gasServiceStatus}</dd></div>
+          <div><dt>${mt('riserInstallLabel')}</dt><dd>${RISER_STATUS_LABELS[area.riserInstallationStatus] || area.riserInstallationStatus}</dd></div>
+          <div><dt>${mt('riserLocationLabel')}</dt><dd>${area.riserLocations ? mt('yes') : mt('no')}</dd></div>
+          <div><dt>${mt('plannedExpansionLabel')}</dt><dd>${area.plannedExpansion ? mt('yes') : mt('no')}</dd></div>
+          <div><dt>${mt('servicesLabel')}</dt><dd>${escapeHtml(area.serviceType || '—')}</dd></div>
         </dl>
         ${area.description ? `<p class="map-info-desc">${escapeHtml(area.description)}</p>` : ''}
-        <p class="map-info-demo-note">⚠ این رکورد نمونه/آزمایشی است و نشان‌دهندهٔ وضعیت تأییدشدهٔ واقعی نیست.</p>
-        <button type="button" class="button button-primary button-block" data-request-for="${area.id}" data-city="${escapeHtml(area.city)}" data-district="${escapeHtml(area.district || '')}">درخواست مشاوره برای این منطقه ←</button>
+        <p class="map-info-demo-note">${mt('demoNote')}</p>
+        <button type="button" class="button button-primary button-block" data-request-for="${area.id}" data-city="${escapeHtml(area.city)}" data-district="${escapeHtml(area.district || '')}">${mt('requestForArea')} ←</button>
       </div>`;
   }
   function escapeHtml(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }

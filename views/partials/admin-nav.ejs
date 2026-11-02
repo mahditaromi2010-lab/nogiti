@@ -2,28 +2,28 @@
   const navItem = (href, icon, label, active) => `<a href="${href}" class="admin-link ${active ? 'is-active' : ''}"${active ? ' aria-current="page"' : ''}><span aria-hidden="true">${icon}</span> <span>${label}</span></a>`;
   const at = prefix => currentPath === prefix || currentPath.startsWith(prefix + '/');
 %>
-<aside class="admin-sidebar" aria-label="منوی پنل مدیریت">
-  <a class="brand brand-light admin-brand" href="<%= roleHome || '/admin' %>"><span class="brand-mark"><img src="/public/images/nogiti-logo-96.webp" srcset="/public/images/nogiti-logo-96.webp 2x, /public/images/nogiti-logo-144.webp 3x" alt="" width="48" height="48" decoding="async"></span><span><strong>Novingity</strong><small>پنل مدیریت</small></span></a>
+<aside class="admin-sidebar" aria-label="<%= t('adminNav.ariaLabel') %>">
+  <a class="brand brand-light admin-brand" href="<%= roleHome || '/admin' %>"><span class="brand-mark"><img src="/public/images/nogiti-logo-96.webp" srcset="/public/images/nogiti-logo-96.webp 2x, /public/images/nogiti-logo-144.webp 3x" alt="" width="48" height="48" decoding="async"></span><span><strong>Novingity</strong><small><%= t('adminNav.panelLabel') %></small></span></a>
   <div class="admin-whoami"><span class="avatar-mini" aria-hidden="true"><%= currentAdmin.username.slice(0,1).toUpperCase() %></span><span><b><%= currentAdmin.username %></b><small><%= roleLabels[currentAdmin.role] || currentAdmin.role %></small></span></div>
   <nav class="admin-nav-links">
-    <% if (can('overview') || can('content')) { %><div class="admin-nav-label">مدیریت محتوا</div><% } %>
-    <% if (can('overview')) { %><%- navItem('/admin', '▦', 'نمای کلی', currentPath === '/admin' || currentPath === '/admin/') %><% } %>
+    <% if (can('overview') || can('content')) { %><div class="admin-nav-label"><%= t('adminNav.contentGroup') %></div><% } %>
+    <% if (can('overview')) { %><%- navItem('/admin', '▦', t('adminNav.overview'), currentPath === '/admin' || currentPath === '/admin/') %><% } %>
     <% if (can('content')) { %>
-      <%- navItem('/admin/products', '▤', 'محصولات و دوره‌ها', at('/admin/products')) %>
-      <%- navItem('/admin/articles', '▧', 'مقالات و تصاویر', at('/admin/articles') || at('/admin/article-images')) %>
+      <%- navItem('/admin/products', '▤', t('adminNav.products'), at('/admin/products')) %>
+      <%- navItem('/admin/articles', '▧', t('adminNav.articles'), at('/admin/articles') || at('/admin/article-images')) %>
       <%- navItem('/admin/team', '☺', t('admin.team.title'), at('/admin/team')) %>
-      <%- navItem('/admin/coverage-areas', '◫', 'مناطق نقشهٔ هرمزگان', at('/admin/coverage-areas')) %>
+      <%- navItem('/admin/coverage-areas', '◫', t('adminCoverage.title'), at('/admin/coverage-areas')) %>
     <% } %>
-    <% if (can('orders') || can('users') || can('settings') || can('audit') || can('support')) { %><div class="admin-nav-label">مدیریت سایت</div><% } %>
-    <% if (can('orders')) { %><%- navItem('/admin/orders', '◷', 'سفارش‌ها', at('/admin/orders')) %><% } %>
+    <% if (can('orders') || can('users') || can('settings') || can('audit') || can('support')) { %><div class="admin-nav-label"><%= t('adminNav.siteGroup') %></div><% } %>
+    <% if (can('orders')) { %><%- navItem('/admin/orders', '◷', t('adminNav.orders'), at('/admin/orders')) %><% } %>
     <% if (can('support')) { %><%- navItem('/admin/tickets', '✉', t('admin.tickets.title'), at('/admin/tickets')) %><% } %>
-    <% if (can('consultation')) { %><%- navItem('/admin/consultation-requests', '⚑', 'درخواست‌های مشاوره', at('/admin/consultation-requests')) %><% } %>
-    <% if (can('users')) { %><%- navItem('/admin/users', '♙', 'کاربران', at('/admin/users')) %><% } %>
-    <% if (can('settings')) { %><%- navItem('/admin/settings', '⚙', 'تنظیمات سایت', at('/admin/settings')) %><% } %>
-    <% if (can('audit')) { %><%- navItem('/admin/audit', '⌁', 'گزارش امنیتی', at('/admin/audit')) %><% } %>
-    <div class="admin-nav-label">حساب</div>
-    <%- navItem('/admin/account', '◉', 'حساب من', at('/admin/account')) %>
-    <% if (can('admins')) { %><%- navItem('/admin/admins', '♧', 'مدیران و دسترسی‌ها', at('/admin/admins')) %><% } %>
-    <a href="/" class="admin-link admin-link-bottom"><span aria-hidden="true">↗</span> <span>مشاهده وب‌سایت</span></a>
+    <% if (can('consultation')) { %><%- navItem('/admin/consultation-requests', '⚑', t('adminNav.consultationRequests'), at('/admin/consultation-requests')) %><% } %>
+    <% if (can('users')) { %><%- navItem('/admin/users', '♙', t('adminNav.users'), at('/admin/users')) %><% } %>
+    <% if (can('settings')) { %><%- navItem('/admin/settings', '⚙', t('adminNav.settings'), at('/admin/settings')) %><% } %>
+    <% if (can('audit')) { %><%- navItem('/admin/audit', '⌁', t('adminNav.auditLog'), at('/admin/audit')) %><% } %>
+    <div class="admin-nav-label"><%= t('adminNav.accountGroup') %></div>
+    <%- navItem('/admin/account', '◉', t('adminNav.myAccount'), at('/admin/account')) %>
+    <% if (can('admins')) { %><%- navItem('/admin/admins', '♧', t('adminNav.adminsAndAccess'), at('/admin/admins')) %><% } %>
+    <a href="/" class="admin-link admin-link-bottom"><span aria-hidden="true">↗</span> <span><%= t('adminNav.viewSite') %></span></a>
   </nav>
 </aside>

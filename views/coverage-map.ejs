@@ -1,65 +1,66 @@
 <%- include('partials/header', {title, metaDescription}) %>
+<script>window.NG_LOCALE = '<%= locale %>';</script>
 <link rel="stylesheet" href="/public/vendor/leaflet/leaflet.css">
-<section class="page-hero map-hero"><div class="container"><div class="breadcrumb"><a href="/">خانه</a><span>/</span><span>نقشه هرمزگان</span></div><span class="section-kicker">HORMOZGAN COVERAGE MAP</span><h1>نقشهٔ پروژه‌ها و محدودهٔ خدمات<br><em>نوین گیتی در هرمزگان</em></h1><p>محدودهٔ پروژه‌ها، خدمات مهندسی و وضعیت بررسی مناطق در استان هرمزگان را مشاهده کنید و برای بررسی تخصصی یا مشاورهٔ یک منطقه، درخواست ثبت کنید.</p>
-<div class="tools-disclaimer demo-disclaimer"><span>⚠</span><p><b>داده نمایشی / آزمایشی:</b> اطلاعات این نقشه فعلاً نمونه و تقریبی است و تا تکمیل آرشیو واقعی پروژه‌های نوین گیتی در هرمزگان، نباید به‌عنوان وضعیت واقعی و تأییدشدهٔ گازرسانی یا پروژه در هیچ منطقه‌ای تلقی شود.</p></div>
+<section class="page-hero map-hero"><div class="container"><div class="breadcrumb"><a href="/"><%= t('tools.breadcrumbHome') %></a><span>/</span><span><%= t('coverageMap.breadcrumbSelf') %></span></div><span class="section-kicker">HORMOZGAN COVERAGE MAP</span><h1><%= t('coverageMap.titlePre') %><br><em><%= t('coverageMap.titleEm') %></em></h1><p><%= t('coverageMap.lead') %></p>
+<div class="tools-disclaimer demo-disclaimer"><span>⚠</span><p><b><%= t('coverageMap.disclaimerLabel') %></b> <%= t('coverageMap.disclaimerText') %></p></div>
 </div></section>
 <%- include('partials/flow-divider') %>
 <section class="section map-summary-section"><div class="container">
   <div class="summary-cards reveal-stagger" id="summaryCards">
-    <div class="summary-card reveal-item"><span class="summary-card-label">کل پروژه‌ها (نمونه)</span><strong data-count="0" id="statTotalProjects">0</strong></div>
-    <div class="summary-card reveal-item"><span class="summary-card-label">پروژه‌های تکمیل‌شده (نمونه)</span><strong data-count="0" id="statCompleted">0</strong></div>
-    <div class="summary-card reveal-item"><span class="summary-card-label">مناطق بررسی‌شده (نمونه)</span><strong data-count="0" id="statSurveyed">0</strong></div>
-    <div class="summary-card reveal-item"><span class="summary-card-label">مناطق برنامه‌ریزی‌شده (نمونه)</span><strong data-count="0" id="statPlanned">0</strong></div>
+    <div class="summary-card reveal-item"><span class="summary-card-label"><%= t('coverageMap.statTotalProjects') %></span><strong data-count="0" id="statTotalProjects">0</strong></div>
+    <div class="summary-card reveal-item"><span class="summary-card-label"><%= t('coverageMap.statCompleted') %></span><strong data-count="0" id="statCompleted">0</strong></div>
+    <div class="summary-card reveal-item"><span class="summary-card-label"><%= t('coverageMap.statSurveyed') %></span><strong data-count="0" id="statSurveyed">0</strong></div>
+    <div class="summary-card reveal-item"><span class="summary-card-label"><%= t('coverageMap.statPlanned') %></span><strong data-count="0" id="statPlanned">0</strong></div>
   </div>
-  <p class="muted-text map-results-line">نمایش <b id="resultProjectCount">0</b> پروژه در <b id="resultAreaCount">0</b> منطقه (بر اساس فیلترهای فعال).</p>
+  <p class="muted-text map-results-line"><%= t('coverageMap.resultsLinePre') %> <b id="resultProjectCount">0</b> <%= t('coverageMap.resultsLineMid') %> <b id="resultAreaCount">0</b> <%= t('coverageMap.resultsLineSuffix') %></p>
 
   <div class="map-filters" id="mapFilters">
-    <div class="form-field"><label for="filterCity">شهر / منطقه</label><select class="form-control" id="filterCity"><option value="">همه شهرها</option><% cities.forEach(c => { %><option value="<%= c %>"><%= c %></option><% }) %></select></div>
-    <div class="form-field"><label for="filterStatus">وضعیت پروژه</label><select class="form-control" id="filterStatus"><option value="">همه</option><option value="completed">تکمیل‌شده</option><option value="in_progress">در حال اجرا</option><option value="planned">برنامه‌ریزی‌شده</option><option value="under_review">در حال بررسی</option></select></div>
-    <div class="form-field"><label for="filterGas">وضعیت خدمات گاز</label><select class="form-control" id="filterGas"><option value="">همه</option><option value="installed">نصب‌شده</option><option value="not_installed">نصب‌نشده</option><option value="planned">برنامه‌ریزی‌شده</option><option value="unknown">نامشخص</option></select></div>
-    <div class="form-field"><label for="filterRiser">وضعیت رایزر</label><select class="form-control" id="filterRiser"><option value="">همه</option><option value="installed">نصب‌شده</option><option value="not_installed">نصب‌نشده</option><option value="planned">برنامه‌ریزی‌شده</option><option value="unknown">نامشخص</option></select></div>
-    <div class="form-field"><label for="filterSearch">جست‌وجوی نام منطقه</label><input class="form-control" id="filterSearch" type="text" placeholder="مثلاً بندرعباس"></div>
-    <button class="button button-outline button-small" type="button" id="resetFilters">حذف فیلترها</button>
+    <div class="form-field"><label for="filterCity"><%= t('coverageMap.filterCity') %></label><select class="form-control" id="filterCity"><option value=""><%= t('coverageMap.filterCityAll') %></option><% cities.forEach(c => { %><option value="<%= c %>"><%= c %></option><% }) %></select></div>
+    <div class="form-field"><label for="filterStatus"><%= t('coverageMap.filterStatus') %></label><select class="form-control" id="filterStatus"><option value=""><%= t('coverageMap.filterAll') %></option><option value="completed"><%= t('coverageMap.statusCompleted') %></option><option value="in_progress"><%= t('coverageMap.statusInProgress') %></option><option value="planned"><%= t('coverageMap.statusPlanned') %></option><option value="under_review"><%= t('coverageMap.statusUnderReview') %></option></select></div>
+    <div class="form-field"><label for="filterGas"><%= t('coverageMap.filterGas') %></label><select class="form-control" id="filterGas"><option value=""><%= t('coverageMap.filterAll') %></option><option value="installed"><%= t('coverageMap.gasInstalled') %></option><option value="not_installed"><%= t('coverageMap.gasNotInstalled') %></option><option value="planned"><%= t('coverageMap.gasPlanned') %></option><option value="unknown"><%= t('coverageMap.gasUnknown') %></option></select></div>
+    <div class="form-field"><label for="filterRiser"><%= t('coverageMap.filterRiser') %></label><select class="form-control" id="filterRiser"><option value=""><%= t('coverageMap.filterAll') %></option><option value="installed"><%= t('coverageMap.gasInstalled') %></option><option value="not_installed"><%= t('coverageMap.gasNotInstalled') %></option><option value="planned"><%= t('coverageMap.gasPlanned') %></option><option value="unknown"><%= t('coverageMap.gasUnknown') %></option></select></div>
+    <div class="form-field"><label for="filterSearch"><%= t('coverageMap.filterSearch') %></label><input class="form-control" id="filterSearch" type="text" placeholder="<%= t('coverageMap.filterSearchPlaceholder') %>"></div>
+    <button class="button button-outline button-small" type="button" id="resetFilters"><%= t('coverageMap.resetFilters') %></button>
   </div>
 
-  <div class="map-legend" aria-label="راهنمای رنگ‌ها">
-    <span class="legend-item"><i class="legend-dot legend-green"></i> تکمیل‌شده / نصب‌شده</span>
-    <span class="legend-item"><i class="legend-dot legend-orange"></i> برنامه‌ریزی‌شده / آتی</span>
-    <span class="legend-item"><i class="legend-dot legend-blue"></i> بررسی‌شده / ارزیابی‌شده</span>
-    <span class="legend-item"><i class="legend-dot legend-gray"></i> نامشخص / تأییدنشده</span>
+  <div class="map-legend" aria-label="<%= t('coverageMap.legendAria') %>">
+    <span class="legend-item"><i class="legend-dot legend-green"></i> <%= t('coverageMap.legendGreen') %></span>
+    <span class="legend-item"><i class="legend-dot legend-orange"></i> <%= t('coverageMap.legendOrange') %></span>
+    <span class="legend-item"><i class="legend-dot legend-blue"></i> <%= t('coverageMap.legendBlue') %></span>
+    <span class="legend-item"><i class="legend-dot legend-gray"></i> <%= t('coverageMap.legendGray') %></span>
   </div>
 
   <div class="map-layout">
-    <div id="coverageMap" class="coverage-map-canvas" role="application" aria-label="نقشهٔ پوشش پروژه‌های هرمزگان" data-areas-api="/api/coverage-areas"></div>
+    <div id="coverageMap" class="coverage-map-canvas" role="application" aria-label="<%= t('coverageMap.canvasAria') %>" data-areas-api="/api/coverage-areas"></div>
     <aside class="map-info-panel" id="mapInfoPanel" aria-live="polite">
-      <div class="map-info-empty"><span>↖</span><p>برای مشاهدهٔ جزئیات یک منطقه، روی نشانگر مربوطه روی نقشه کلیک کنید.</p></div>
+      <div class="map-info-empty"><span>↖</span><p><%= t('coverageMap.infoPanelEmpty') %></p></div>
     </aside>
   </div>
 </div></section>
 
 <section class="section consultation-section" id="consultation-form"><div class="container">
-  <div class="section-heading"><div><span class="section-kicker">ENGINEERING CONSULTATION</span><h2>درخواست مشاوره یا ارزیابی مهندسی</h2><p>فرم زیر را تکمیل کنید؛ در صورت انتخاب یک منطقه از نقشه، اطلاعات آن به‌صورت خودکار در فرم پر می‌شود.</p></div></div>
+  <div class="section-heading"><div><span class="section-kicker"><%= t('consultation.sectionKicker') %></span><h2><%= t('consultation.heading') %></h2><p><%= t('consultation.sub') %></p></div></div>
   <form class="admin-form consultation-request-form" action="/consultation-requests#consultation-form" method="post" enctype="multipart/form-data" data-unsaved-guard>
     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
     <input type="hidden" name="coverage_area_id" id="field_coverage_area_id" value="<%= formValues.coverage_area_id || '' %>">
     <div class="form-grid">
-      <div class="form-field"><label for="field_full_name">نام و نام خانوادگی *</label><input class="form-control" id="field_full_name" name="full_name" maxlength="160" value="<%= formValues.full_name || '' %>" required><% if (formErrors.full_name) { %><small class="field-error"><%= formErrors.full_name %></small><% } %></div>
-      <div class="form-field"><label for="field_mobile">شمارهٔ موبایل *</label><input class="form-control" dir="ltr" id="field_mobile" name="mobile" placeholder="09121234567" value="<%= formValues.mobile || '' %>" required><% if (formErrors.mobile) { %><small class="field-error"><%= formErrors.mobile %></small><% } %></div>
-      <div class="form-field"><label for="field_contact_method">روش تماس ترجیحی</label><select class="form-control" id="field_contact_method" name="contact_method"><% ['phone','sms','whatsapp','email'].forEach(v => { %><option value="<%= v %>" <%= formValues.contact_method===v?'selected':'' %>><%= contactMethodLabels[v] %></option><% }) %></select></div>
-      <div class="form-field"><label for="field_province">استان</label><input class="form-control" id="field_province" name="province" value="<%= formValues.province || 'هرمزگان' %>"></div>
-      <div class="form-field"><label for="field_city">شهر *</label><input class="form-control" id="field_city" name="city" value="<%= formValues.city || '' %>" required><% if (formErrors.city) { %><small class="field-error"><%= formErrors.city %></small><% } %></div>
-      <div class="form-field"><label for="field_district">محله / منطقه</label><input class="form-control" id="field_district" name="district" value="<%= formValues.district || '' %>"></div>
-      <div class="form-field"><label for="field_project_type">نوع پروژه</label><input class="form-control" id="field_project_type" name="project_type" value="<%= formValues.project_type || '' %>" placeholder="مثلاً ساختمان مسکونی"></div>
-      <div class="form-field"><label for="field_request_type">نوع درخواست</label><select class="form-control" id="field_request_type" name="request_type"><% Object.keys(requestTypeLabels).forEach(v => { %><option value="<%= v %>" <%= formValues.request_type===v?'selected':'' %>><%= requestTypeLabels[v] %></option><% }) %></select></div>
-      <div class="form-field"><label for="field_project_status">وضعیت پروژه</label><select class="form-control" id="field_project_status" name="project_status"><% Object.keys(projectStatusFormLabels).forEach(v => { %><option value="<%= v %>" <%= formValues.project_status===v?'selected':'' %>><%= projectStatusFormLabels[v] %></option><% }) %></select></div>
-      <div class="form-field form-span-2"><label for="field_project_address">آدرس / موقعیت تقریبی پروژه</label><input class="form-control" id="field_project_address" name="project_address" maxlength="400" value="<%= formValues.project_address || '' %>"></div>
-      <div class="form-field form-span-2"><label for="field_project_description">توضیح پروژه *</label><textarea class="form-control" id="field_project_description" name="project_description" rows="4" maxlength="3000" required><%= formValues.project_description || '' %></textarea><% if (formErrors.project_description) { %><small class="field-error"><%= formErrors.project_description %></small><% } %></div>
-      <div class="form-field form-span-2"><label for="field_notes">توضیحات تکمیلی</label><textarea class="form-control" id="field_notes" name="notes" rows="3" maxlength="2000"><%= formValues.notes || '' %></textarea></div>
-      <div class="form-field"><label for="field_preferred_contact_time">زمان ترجیحی تماس</label><input class="form-control" id="field_preferred_contact_time" name="preferred_contact_time" maxlength="120" value="<%= formValues.preferred_contact_time || '' %>" placeholder="مثلاً روزهای کاری، ساعت ۹ تا ۱۴"></div>
-      <div class="form-field form-span-2"><label for="field_attachment">پیوست (عکس محل پروژه یا نقشه)</label><input class="form-control file-control" id="field_attachment" type="file" name="attachment" accept="image/jpeg,image/png,image/webp,image/gif"><small>اختیاری؛ حداکثر ۸ مگابایت؛ JPG، PNG، WebP یا GIF.</small><% if (formErrors.attachment) { %><small class="field-error"><%= formErrors.attachment %></small><% } %></div>
+      <div class="form-field"><label for="field_full_name"><%= t('consultation.fullName') %> *</label><input class="form-control" id="field_full_name" name="full_name" maxlength="160" value="<%= formValues.full_name || '' %>" required><% if (formErrors.full_name) { %><small class="field-error"><%= formErrors.full_name %></small><% } %></div>
+      <div class="form-field"><label for="field_mobile"><%= t('consultation.mobile') %> *</label><input class="form-control" dir="ltr" id="field_mobile" name="mobile" placeholder="09121234567" value="<%= formValues.mobile || '' %>" required><% if (formErrors.mobile) { %><small class="field-error"><%= formErrors.mobile %></small><% } %></div>
+      <div class="form-field"><label for="field_contact_method"><%= t('consultation.contactMethodLabel') %></label><select class="form-control" id="field_contact_method" name="contact_method"><% ['phone','sms','whatsapp','email'].forEach(v => { %><option value="<%= v %>" <%= formValues.contact_method===v?'selected':'' %>><%= contactMethodLabels[v] %></option><% }) %></select></div>
+      <div class="form-field"><label for="field_province"><%= t('consultation.province') %></label><input class="form-control" id="field_province" name="province" value="<%= formValues.province || t('coverageMap.hormozganProvince') %>"></div>
+      <div class="form-field"><label for="field_city"><%= t('consultation.city') %> *</label><input class="form-control" id="field_city" name="city" value="<%= formValues.city || '' %>" required><% if (formErrors.city) { %><small class="field-error"><%= formErrors.city %></small><% } %></div>
+      <div class="form-field"><label for="field_district"><%= t('consultation.district') %></label><input class="form-control" id="field_district" name="district" value="<%= formValues.district || '' %>"></div>
+      <div class="form-field"><label for="field_project_type"><%= t('consultation.projectType') %></label><input class="form-control" id="field_project_type" name="project_type" value="<%= formValues.project_type || '' %>" placeholder="<%= t('consultation.projectTypePlaceholder') %>"></div>
+      <div class="form-field"><label for="field_request_type"><%= t('consultation.requestTypeLabel') %></label><select class="form-control" id="field_request_type" name="request_type"><% Object.keys(requestTypeLabels).forEach(v => { %><option value="<%= v %>" <%= formValues.request_type===v?'selected':'' %>><%= requestTypeLabels[v] %></option><% }) %></select></div>
+      <div class="form-field"><label for="field_project_status"><%= t('consultation.projectStatusLabel') %></label><select class="form-control" id="field_project_status" name="project_status"><% Object.keys(projectStatusFormLabels).forEach(v => { %><option value="<%= v %>" <%= formValues.project_status===v?'selected':'' %>><%= projectStatusFormLabels[v] %></option><% }) %></select></div>
+      <div class="form-field form-span-2"><label for="field_project_address"><%= t('consultation.projectAddress') %></label><input class="form-control" id="field_project_address" name="project_address" maxlength="400" value="<%= formValues.project_address || '' %>"></div>
+      <div class="form-field form-span-2"><label for="field_project_description"><%= t('consultation.projectDescription') %> *</label><textarea class="form-control" id="field_project_description" name="project_description" rows="4" maxlength="3000" required><%= formValues.project_description || '' %></textarea><% if (formErrors.project_description) { %><small class="field-error"><%= formErrors.project_description %></small><% } %></div>
+      <div class="form-field form-span-2"><label for="field_notes"><%= t('consultation.notes') %></label><textarea class="form-control" id="field_notes" name="notes" rows="3" maxlength="2000"><%= formValues.notes || '' %></textarea></div>
+      <div class="form-field"><label for="field_preferred_contact_time"><%= t('consultation.preferredContactTime') %></label><input class="form-control" id="field_preferred_contact_time" name="preferred_contact_time" maxlength="120" value="<%= formValues.preferred_contact_time || '' %>" placeholder="<%= t('consultation.preferredContactTimePlaceholder') %>"></div>
+      <div class="form-field form-span-2"><label for="field_attachment"><%= t('consultation.attachment') %></label><input class="form-control file-control" id="field_attachment" type="file" name="attachment" accept="image/jpeg,image/png,image/webp,image/gif"><small><%= t('consultation.attachmentHint') %></small><% if (formErrors.attachment) { %><small class="field-error"><%= formErrors.attachment %></small><% } %></div>
     </div>
-    <p class="privacy-note">حریم خصوصی: اطلاعات تماس شما فقط برای بررسی و پاسخ‌گویی به همین درخواست استفاده می‌شود و در هیچ بخش عمومی سایت نمایش داده نمی‌شود.</p>
-    <div class="form-actions"><button class="button button-primary button-large" type="submit" data-busy-label="در حال ارسال…">ثبت درخواست مشاوره <span>←</span></button></div>
+    <p class="privacy-note"><%= t('consultation.privacyNote') %></p>
+    <div class="form-actions"><button class="button button-primary button-large" type="submit" data-busy-label="<%= t('consultation.submitBusy') %>"><%= t('consultation.submit') %> <span>←</span></button></div>
   </form>
 </div></section>
 <script type="application/json" id="coverage-areas-data"><%- JSON.stringify(areas) %></script>

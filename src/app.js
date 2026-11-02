@@ -145,7 +145,9 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
 
   const asyncRoute = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
   const slugBase = text => String(text || '').trim().toLowerCase().normalize('NFKC').replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '').slice(0, 160) || `item-${Date.now()}`;
-  const money = value => `${new Intl.NumberFormat('fa-IR').format(Number(value || 0))} تومان`;
+  const money = (value, locale = 'fa') => locale === 'en'
+    ? `${new Intl.NumberFormat('en-US').format(Number(value || 0))} Toman`
+    : `${new Intl.NumberFormat('fa-IR').format(Number(value || 0))} تومان`;
   const safeEqual = (a, b) => {
     const ba = Buffer.from(String(a || ''));
     const bb = Buffer.from(String(b || ''));
@@ -188,7 +190,7 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
       return req.session.csrfToken;
     };
     res.locals.csrfToken = { toString: csrfToken, valueOf: csrfToken, toJSON: csrfToken };
-    res.locals.money = money;
+    res.locals.money = value => money(value, res.locals.locale);
     res.locals.siteName = settingsCache.site_name || 'Novingity';
     res.locals.siteTagline = settingsCache.site_tagline || 'مهندسی با اطمینان';
     res.locals.siteEmail = settingsCache.contact_email || '';
@@ -199,9 +201,9 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
     res.locals.currentPath = req.path;
     res.locals.requestId = req.id;
     res.locals.flash = req.session.flash || null;
-    res.locals.statusLabels = STATUS_LABELS;
-    res.locals.orderStatusLabels = ORDER_STATUS_LABELS;
-    res.locals.roleLabels = ROLE_LABELS;
+    res.locals.statusLabels = localizedLabels(res.locals.t, STATUS_LABELS, 'statusLabel');
+    res.locals.orderStatusLabels = localizedLabels(res.locals.t, ORDER_STATUS_LABELS, 'orderStatusLabel');
+    res.locals.roleLabels = localizedLabels(res.locals.t, ROLE_LABELS, 'roleLabel');
     res.locals.qs = queryString;
     delete req.session.flash;
     next();
@@ -254,7 +256,7 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
   const requireAuth = (req, res, next) => {
     if (!req.user) {
       if (req.method === 'GET') req.session.returnTo = safeNextPath(req.originalUrl, '/account');
-      setFlash(req, 'info', 'برای ادامه ابتدا وارد حساب کاربری شوید.');
+      setFlash(req, 'info', res.locals.t('flash.auth.requireLogin'));
       return req.session.save(() => res.redirect('/login'));
     }
     next();
@@ -262,7 +264,7 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
 
   const requireAdmin = (req, res, next) => {
     if (!req.admin || !req.admin.is_active) {
-      if (req.method === 'GET') return renderError(res, 403, 'دسترسی مجاز نیست', 'این بخش فقط برای مدیران واردشده مجاز است.', { actionHref: '/admin/login', actionLabel: 'ورود مدیر' });
+      if (req.method === 'GET') return renderError(res, 403, res.locals.t('errorPage.accessDeniedTitle'), res.locals.t('errorPage.accessDeniedMessage'), { actionHref: '/admin/login', actionLabel: res.locals.t('errorPage.adminLoginAction') });
       return res.status(403).send('Forbidden');
     }
     const permission = permissionForPath(req.path);
@@ -438,13 +440,13 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
       pool.query("SELECT * FROM products WHERE status='published' ORDER BY featured DESC, created_at DESC LIMIT 3"),
       pool.query("SELECT * FROM articles WHERE status='published' ORDER BY published_at DESC NULLS LAST, created_at DESC LIMIT 3")
     ]);
-    res.render('home', { title: 'خانه', settings, products: products.rows, articles: articles.rows });
+    res.render('home', { title: res.locals.t('page.home'), settings, products: products.rows, articles: articles.rows });
   }));
   app.get('/shop', asyncRoute(async (req, res) => {
     const type = ['course', 'plugin'].includes(req.query.type) ? req.query.type : '';
     const { where, params, q } = buildWhere({ q: req.query.q, searchColumns: ['title', 'short_description', 'category'], filters: [['product_type', type]], base: ["status='published'"] });
     const products = await pool.query(`SELECT * FROM products ${where} ORDER BY featured DESC, created_at DESC`, params);
-    res.render('shop', { title: 'فروشگاه', products: products.rows, type, q });
+    res.render('shop', { title: res.locals.t('page.shop'), products: products.rows, type, q });
   }));
   app.get('/shop/:slug', asyncRoute(async (req, res) => {
     const p = await pool.query("SELECT * FROM products WHERE slug=$1 AND status='published'", [req.params.slug]);
@@ -469,7 +471,7 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
   app.get('/articles', asyncRoute(async (req, res) => {
     const { where, params, q } = buildWhere({ q: req.query.q, searchColumns: ['title', 'excerpt', 'category'], base: ["status='published'"] });
     const articles = await pool.query(`SELECT * FROM articles ${where} ORDER BY published_at DESC NULLS LAST, created_at DESC`, params);
-    res.render('articles', { title: 'مقالات تخصصی', articles: articles.rows, q });
+    res.render('articles', { title: res.locals.t('page.articles'), articles: articles.rows, q });
   }));
   app.get('/articles/:slug', asyncRoute(async (req, res) => {
     const r = await pool.query("SELECT * FROM articles WHERE slug=$1 AND status='published'", [req.params.slug]);
@@ -481,9 +483,9 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
   }));
   app.get('/about', asyncRoute(async (req, res) => {
     const [settings, team] = await Promise.all([getSettings(), pool.query('SELECT * FROM team_members WHERE is_active ORDER BY display_order,id')]);
-    res.render('about', { title: 'درباره Novingity', settings, teamMembers: team.rows });
+    res.render('about', { title: res.locals.t('page.about'), settings, teamMembers: team.rows });
   }));
-  app.get('/tools', (_req, res) => res.render('tools', { title: 'ابزارهای تأسیسات' }));
+  app.get('/tools', (_req, res) => res.render('tools', { title: res.locals.t('page.tools') }));
 
   // ───────────── Hormozgan coverage map (demo data; item 7) ─────────────
   // One clean read function so a future real data source (admin CRUD, an external system) can replace the
@@ -496,6 +498,9 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
   };
   const PROJECT_STATUS_FORM_LABELS = { existing_building: 'ساختمان موجود', under_construction: 'در حال ساخت', planned_project: 'پروژه برنامه‌ریزی‌شده', renovation: 'بازسازی', other: 'سایر' };
   const CONTACT_METHOD_LABELS = { phone: 'تماس تلفنی', sms: 'پیامک', whatsapp: 'واتس‌اپ', email: 'ایمیل' };
+  // Builds a {key: localized label} map for the active request's locale, falling back to the Persian
+  // master map's own keys (never its Persian text) when a translation key is somehow missing.
+  const localizedLabels = (t, map, prefix) => Object.fromEntries(Object.keys(map).map(k => [k, t(`${prefix}.${k}`, map[k])]));
   function mapCoverageRow(r) {
     return {
       id: r.id, projectName: r.project_name, province: r.province, city: r.city, district: r.district,
@@ -513,10 +518,10 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
   app.get('/coverage-map', asyncRoute(async (req, res) => {
     const areas = await readCoverageAreas();
     res.render('coverage-map', {
-      title: 'نقشه پروژه‌ها و محدوده خدمات نوین گیتی در هرمزگان',
-      metaDescription: 'محدوده پروژه‌ها، خدمات مهندسی و وضعیت بررسی مناطق در هرمزگان را مشاهده کنید و برای بررسی تخصصی یا مشاوره درخواست ثبت کنید.',
+      title: res.locals.t('coverageMap.pageTitle'),
+      metaDescription: res.locals.t('coverageMap.metaDescription'),
       areas, cities: [...new Set(areas.map(a => a.city))].sort(),
-      requestTypeLabels: REQUEST_TYPE_LABELS, projectStatusFormLabels: PROJECT_STATUS_FORM_LABELS, contactMethodLabels: CONTACT_METHOD_LABELS,
+      requestTypeLabels: localizedLabels(res.locals.t, REQUEST_TYPE_LABELS, 'consultation.requestType'), projectStatusFormLabels: localizedLabels(res.locals.t, PROJECT_STATUS_FORM_LABELS, 'consultation.projectStatus'), contactMethodLabels: localizedLabels(res.locals.t, CONTACT_METHOD_LABELS, 'consultation.contactMethod'),
       formValues: {}, formErrors: {}
     });
   }));
@@ -549,19 +554,19 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
     const notes = normalizeText(req.body.notes, 2000);
     const preferredContactTime = normalizeText(req.body.preferred_contact_time, 120);
     const errors = {};
-    if (!fullName) errors.full_name = 'نام و نام خانوادگی الزامی است.';
-    if (!mobile) errors.mobile = 'شمارهٔ موبایل معتبر نیست؛ نمونهٔ درست: 09121234567';
-    if (!city) errors.city = 'شهر الزامی است.';
-    if (!projectDescription) errors.project_description = 'توضیح مختصر پروژه الزامی است.';
+    if (!fullName) errors.full_name = res.locals.t('consultation.error.fullName');
+    if (!mobile) errors.mobile = res.locals.t('consultation.error.mobile');
+    if (!city) errors.city = res.locals.t('consultation.error.city');
+    if (!projectDescription) errors.project_description = res.locals.t('consultation.error.description');
     if (Object.keys(errors).length) {
       removeUploaded(req);
       const areas = await readCoverageAreas();
-      res.locals.flash = { type: 'error', message: 'لطفاً خطاهای مشخص‌شدهٔ فرم را برطرف کنید.' };
+      res.locals.flash = { type: 'error', message: res.locals.t('consultation.error.summary') };
       return res.status(422).render('coverage-map', {
-        title: 'نقشه پروژه‌ها و محدوده خدمات نوین گیتی در هرمزگان',
-        metaDescription: 'محدوده پروژه‌ها، خدمات مهندسی و وضعیت بررسی مناطق در هرمزگان را مشاهده کنید و برای بررسی تخصصی یا مشاوره درخواست ثبت کنید.',
+        title: res.locals.t('coverageMap.pageTitle'),
+        metaDescription: res.locals.t('coverageMap.metaDescription'),
         areas, cities: [...new Set(areas.map(a => a.city))].sort(),
-        requestTypeLabels: REQUEST_TYPE_LABELS, projectStatusFormLabels: PROJECT_STATUS_FORM_LABELS, contactMethodLabels: CONTACT_METHOD_LABELS,
+        requestTypeLabels: localizedLabels(res.locals.t, REQUEST_TYPE_LABELS, 'consultation.requestType'), projectStatusFormLabels: localizedLabels(res.locals.t, PROJECT_STATUS_FORM_LABELS, 'consultation.projectStatus'), contactMethodLabels: localizedLabels(res.locals.t, CONTACT_METHOD_LABELS, 'consultation.contactMethod'),
         formValues: { full_name: fullName, mobile: mobileRaw, contact_method: contactMethod, province, city, district, coverage_area_id: coverageAreaId || '', project_type: projectType, project_address: projectAddress, project_description: projectDescription, request_type: requestType, project_status: projectStatus, notes, preferred_contact_time: preferredContactTime },
         formErrors: errors
       });
@@ -573,20 +578,20 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
       [fullName, mobile, contactMethod, province, city, district, coverageAreaId, projectType, projectAddress, projectDescription, requestType, projectStatus, attachmentPath, notes, preferredContactTime]
     );
     const reference = `CR-${saved.rows[0].id}`;
-    setFlash(req, 'success', `درخواست شما با موفقیت ثبت شد. شمارهٔ پیگیری: ${reference}. کارشناسان نوین گیتی به‌زودی با شما تماس می‌گیرند.`);
+    setFlash(req, 'success', `${res.locals.t('consultation.success.prefix')} ${reference}. ${res.locals.t('consultation.success.suffix')}`);
     res.redirect('/coverage-map');
   }));
   app.get('/admin/consultation-requests', requireAdmin, asyncRoute(async (req, res) => {
     const status = ['new', 'reviewing', 'contacted', 'closed'].includes(req.query.status) ? req.query.status : '';
     const { where, params } = buildWhere({ filters: [['status', status]] });
     const r = await pool.query(`SELECT * FROM consultation_requests ${where} ORDER BY created_at DESC LIMIT 200`, params);
-    res.render('admin/consultation-requests', { title: 'درخواست‌های مشاوره مهندسی', requests: r.rows, filters: { status }, requestTypeLabels: REQUEST_TYPE_LABELS, projectStatusFormLabels: PROJECT_STATUS_FORM_LABELS, contactMethodLabels: CONTACT_METHOD_LABELS });
+    res.render('admin/consultation-requests', { title: res.locals.t('admin.consultation.title'), requests: r.rows, filters: { status }, requestTypeLabels: localizedLabels(res.locals.t, REQUEST_TYPE_LABELS, 'consultation.requestType'), projectStatusFormLabels: localizedLabels(res.locals.t, PROJECT_STATUS_FORM_LABELS, 'consultation.projectStatus'), contactMethodLabels: localizedLabels(res.locals.t, CONTACT_METHOD_LABELS, 'consultation.contactMethod') });
   }));
   app.post('/admin/consultation-requests/:id/status', requireAdmin, asyncRoute(async (req, res) => {
     const status = ['new', 'reviewing', 'contacted', 'closed'].includes(req.body.status) ? req.body.status : null;
-    if (!status) { setFlash(req, 'error', 'وضعیت نامعتبر است.'); return res.redirect('/admin/consultation-requests'); }
+    if (!status) { setFlash(req, 'error', res.locals.t('admin.consultation.invalidStatus')); return res.redirect('/admin/consultation-requests'); }
     const r = await pool.query('UPDATE consultation_requests SET status=$1,updated_at=NOW() WHERE id=$2 RETURNING id', [status, req.params.id]);
-    setFlash(req, r.rowCount ? 'success' : 'error', r.rowCount ? 'وضعیت درخواست به‌روزرسانی شد.' : 'این درخواست پیدا نشد.');
+    setFlash(req, r.rowCount ? 'success' : 'error', r.rowCount ? res.locals.t('admin.consultation.statusUpdated') : res.locals.t('admin.consultation.notFound'));
     res.redirect('/admin/consultation-requests');
   }));
 
@@ -615,42 +620,42 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
   });
   app.get('/admin/coverage-areas', requireAdmin, asyncRoute(async (req, res) => {
     const r = await pool.query('SELECT * FROM coverage_areas ORDER BY city, id');
-    res.render('admin/coverage-areas', { title: 'مناطق نقشهٔ هرمزگان', areas: r.rows, projectStatusLabels: COVERAGE_PROJECT_STATUS_LABELS, gasStatusLabels: COVERAGE_GAS_STATUS_LABELS });
+    res.render('admin/coverage-areas', { title: res.locals.t('adminCoverage.title'), areas: r.rows, projectStatusLabels: localizedLabels(res.locals.t, COVERAGE_PROJECT_STATUS_LABELS, 'coverageAdmin.projectStatus'), gasStatusLabels: localizedLabels(res.locals.t, COVERAGE_GAS_STATUS_LABELS, 'coverageAdmin.gasStatus') });
   }));
-  app.get('/admin/coverage-areas/new', requireAdmin, (_req, res) => res.render('admin/coverage-area-form', { title: 'منطقهٔ جدید', area: null }));
+  app.get('/admin/coverage-areas/new', requireAdmin, (req, res) => res.render('admin/coverage-area-form', { title: res.locals.t('adminCoverage.newTitle'), area: null }));
   app.post('/admin/coverage-areas', requireAdmin, asyncRoute(async (req, res) => {
     const form = readCoverageForm(req);
     if (!form.projectName || !form.city || !Number.isFinite(form.lat) || !Number.isFinite(form.lng)) {
-      setFlash(req, 'error', 'نام پروژه، شهر و مختصات (عرض/طول جغرافیایی) الزامی است.'); return res.redirect('/admin/coverage-areas/new');
+      setFlash(req, 'error', res.locals.t('adminCoverage.validationError')); return res.redirect('/admin/coverage-areas/new');
     }
     await pool.query(
       `INSERT INTO coverage_areas(project_name,province,city,district,lat,lng,approximate_location_label,project_count,service_type,project_status,gas_service_status,riser_installation_status,riser_locations_identified,planned_expansion,description,is_demo,last_updated)
        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,NOW())`,
       [form.projectName, form.province, form.city, form.district, form.lat, form.lng, form.approximateLocation, form.projectCount, form.serviceType, form.projectStatus, form.gasServiceStatus, form.riserInstallationStatus, form.riserLocations, form.plannedExpansion, form.description, form.isDemo]
     );
-    setFlash(req, 'success', 'منطقه به نقشه اضافه شد.'); res.redirect('/admin/coverage-areas');
+    setFlash(req, 'success', res.locals.t('adminCoverage.added')); res.redirect('/admin/coverage-areas');
   }));
   app.get('/admin/coverage-areas/:id/edit', requireAdmin, asyncRoute(async (req, res) => {
     const r = await pool.query('SELECT * FROM coverage_areas WHERE id=$1', [req.params.id]);
-    if (!r.rowCount) return renderError(res, 404, 'پیدا نشد', 'این منطقه پیدا نشد.');
-    res.render('admin/coverage-area-form', { title: 'ویرایش منطقه', area: r.rows[0] });
+    if (!r.rowCount) return renderError(res, 404, res.locals.t('adminCoverage.notFoundTitle'), res.locals.t('adminCoverage.notFoundMessage'));
+    res.render('admin/coverage-area-form', { title: res.locals.t('adminCoverage.editTitle'), area: r.rows[0] });
   }));
   app.post('/admin/coverage-areas/:id/edit', requireAdmin, asyncRoute(async (req, res) => {
     const existing = await pool.query('SELECT id FROM coverage_areas WHERE id=$1', [req.params.id]);
-    if (!existing.rowCount) return renderError(res, 404, 'پیدا نشد', 'این منطقه پیدا نشد.');
+    if (!existing.rowCount) return renderError(res, 404, res.locals.t('adminCoverage.notFoundTitle'), res.locals.t('adminCoverage.notFoundMessage'));
     const form = readCoverageForm(req);
     if (!form.projectName || !form.city || !Number.isFinite(form.lat) || !Number.isFinite(form.lng)) {
-      setFlash(req, 'error', 'نام پروژه، شهر و مختصات (عرض/طول جغرافیایی) الزامی است.'); return res.redirect(`/admin/coverage-areas/${req.params.id}/edit`);
+      setFlash(req, 'error', res.locals.t('adminCoverage.validationError')); return res.redirect(`/admin/coverage-areas/${req.params.id}/edit`);
     }
     await pool.query(
       `UPDATE coverage_areas SET project_name=$1,province=$2,city=$3,district=$4,lat=$5,lng=$6,approximate_location_label=$7,project_count=$8,service_type=$9,project_status=$10,gas_service_status=$11,riser_installation_status=$12,riser_locations_identified=$13,planned_expansion=$14,description=$15,is_demo=$16,last_updated=NOW(),updated_at=NOW() WHERE id=$17`,
       [form.projectName, form.province, form.city, form.district, form.lat, form.lng, form.approximateLocation, form.projectCount, form.serviceType, form.projectStatus, form.gasServiceStatus, form.riserInstallationStatus, form.riserLocations, form.plannedExpansion, form.description, form.isDemo, req.params.id]
     );
-    setFlash(req, 'success', 'منطقه به‌روزرسانی شد.'); res.redirect('/admin/coverage-areas');
+    setFlash(req, 'success', res.locals.t('adminCoverage.updated')); res.redirect('/admin/coverage-areas');
   }));
   app.post('/admin/coverage-areas/:id/delete', requireAdmin, asyncRoute(async (req, res) => {
     const r = await pool.query('DELETE FROM coverage_areas WHERE id=$1 RETURNING id', [req.params.id]);
-    setFlash(req, r.rowCount ? 'success' : 'error', r.rowCount ? 'منطقه حذف شد.' : 'این منطقه پیدا نشد.'); res.redirect('/admin/coverage-areas');
+    setFlash(req, r.rowCount ? 'success' : 'error', r.rowCount ? res.locals.t('adminCoverage.deleted') : res.locals.t('adminCoverage.notFoundMessage')); res.redirect('/admin/coverage-areas');
   }));
 
   // ───────────── OTP authentication ─────────────
@@ -658,15 +663,15 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
   app.get('/login', (req, res) => {
     if (req.query.next) req.session.returnTo = safeNextPath(String(req.query.next), '/account');
     if (req.user && req.query.step !== 'code') return res.redirect(safeNextPath(req.session.returnTo, '/account'));
-    res.render('login', { title: 'ورود به حساب', step: req.query.step === 'code' ? 'code' : 'phone', devOtp: !IS_PROD && process.env.SHOW_DEV_OTP === 'true' ? req.session.devOtp : null, draftPhone: req.session.loginDraft?.phone || '' });
+    res.render('login', { title: res.locals.t('page.login'), step: req.query.step === 'code' ? 'code' : 'phone', devOtp: !IS_PROD && process.env.SHOW_DEV_OTP === 'true' ? req.session.devOtp : null, draftPhone: req.session.loginDraft?.phone || '' });
   });
   app.post('/auth/request-code', otpLimiter, asyncRoute(async (req, res) => {
     const phone = normalizeIranMobile(String(req.body.phone || ''));
     const firstName = normalizeText(req.body.firstName, 100);
     const lastName = normalizeText(req.body.lastName, 100);
-    if (!phone) { setFlash(req, 'error', 'شمارهٔ موبایل معتبر نیست؛ نمونهٔ درست: 09121234567'); return res.redirect('/login'); }
+    if (!phone) { setFlash(req, 'error', res.locals.t('flash.auth.invalidPhone')); return res.redirect('/login'); }
     const recent = await pool.query("SELECT 1 FROM otp_codes WHERE phone=$1 AND created_at > NOW() - INTERVAL '60 seconds' AND consumed_at IS NULL LIMIT 1", [phone]);
-    if (recent.rowCount) { setFlash(req, 'info', 'برای این شماره اخیراً کد صادر شده است؛ یک دقیقه صبر کنید.'); return res.redirect('/login'); }
+    if (recent.rowCount) { setFlash(req, 'info', res.locals.t('flash.auth.codeRecentlySent')); return res.redirect('/login'); }
     const code = String(crypto.randomInt(100000, 1000000));
     await pool.query('INSERT INTO otp_codes(phone,code_hash,expires_at) VALUES($1,$2,NOW()+INTERVAL \'5 minutes\')', [phone, otpHash(phone, code)]);
     const message = `کد ورود Novingity: ${code}\nاعتبار: ۵ دقیقه`;
@@ -680,53 +685,53 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
         req.session.devOtp = null;
       } catch (err) {
         logger.error('kavenegar request failed', { requestId: req.id, error: err });
-        setFlash(req, 'error', 'ارسال پیامک ناموفق بود. کمی بعد دوباره تلاش کنید.');
+        setFlash(req, 'error', res.locals.t('flash.auth.smsSendFailed'));
         return res.redirect('/login');
       }
     } else if (IS_PROD) {
-      setFlash(req, 'error', 'سرویس پیامک هنوز پیکربندی نشده است. با مدیر سایت تماس بگیرید.');
+      setFlash(req, 'error', res.locals.t('flash.auth.smsNotConfigured'));
       return res.redirect('/login');
     } else {
       if (process.env.SHOW_DEV_OTP === 'true') logger.info('development OTP issued (visible on the login page only)', { phone });
       req.session.devOtp = process.env.SHOW_DEV_OTP === 'true' ? code : null;
     }
     req.session.loginDraft = { phone, firstName, lastName };
-    setFlash(req, 'success', 'کد تأیید ارسال شد. کد تا ۵ دقیقه معتبر است.');
+    setFlash(req, 'success', res.locals.t('flash.auth.codeSent'));
     res.redirect('/login?step=code');
   }));
   app.post('/auth/verify-code', verifyCodeLimiter, asyncRoute(async (req, res) => {
     const code = digitsEnglish(req.body.code).trim();
     const draft = req.session.loginDraft;
-    if (!draft || !/^\d{6}$/.test(code)) { setFlash(req, 'error', 'درخواست ورود نامعتبر است؛ دوباره کد بگیرید.'); return res.redirect('/login'); }
+    if (!draft || !/^\d{6}$/.test(code)) { setFlash(req, 'error', res.locals.t('flash.auth.invalidLoginRequest')); return res.redirect('/login'); }
     const q = await pool.query('SELECT * FROM otp_codes WHERE phone=$1 AND consumed_at IS NULL ORDER BY created_at DESC LIMIT 1', [draft.phone]);
     if (!q.rowCount || new Date(q.rows[0].expires_at) < new Date() || q.rows[0].attempts >= 5) {
-      setFlash(req, 'error', 'کد منقضی شده یا تعداد تلاش‌ها بیش از حد مجاز است.'); return res.redirect('/login');
+      setFlash(req, 'error', res.locals.t('flash.auth.codeExpiredOrTooMany')); return res.redirect('/login');
     }
     // Atomically consume one attempt; concurrent guesses cannot exceed the 5-attempt budget.
     const attempt = await pool.query('UPDATE otp_codes SET attempts=attempts+1 WHERE id=$1 AND attempts<5 AND consumed_at IS NULL RETURNING id', [q.rows[0].id]);
-    if (!attempt.rowCount) { setFlash(req, 'error', 'کد منقضی شده یا تعداد تلاش‌ها بیش از حد مجاز است.'); return res.redirect('/login'); }
-    if (!safeEqual(otpHash(draft.phone, code), q.rows[0].code_hash)) { setFlash(req, 'error', 'کد واردشده درست نیست.'); return res.redirect('/login?step=code'); }
+    if (!attempt.rowCount) { setFlash(req, 'error', res.locals.t('flash.auth.codeExpiredOrTooMany')); return res.redirect('/login'); }
+    if (!safeEqual(otpHash(draft.phone, code), q.rows[0].code_hash)) { setFlash(req, 'error', res.locals.t('flash.auth.codeIncorrect')); return res.redirect('/login?step=code'); }
     const consumed = await pool.query('UPDATE otp_codes SET consumed_at=NOW() WHERE id=$1 AND consumed_at IS NULL RETURNING id', [q.rows[0].id]);
-    if (!consumed.rowCount) { setFlash(req, 'error', 'این کد قبلاً استفاده شده است؛ دوباره کد بگیرید.'); return res.redirect('/login'); }
+    if (!consumed.rowCount) { setFlash(req, 'error', res.locals.t('flash.auth.codeAlreadyUsed')); return res.redirect('/login'); }
     const userRes = await pool.query(`INSERT INTO users(phone,first_name,last_name) VALUES($1,$2,$3)
       ON CONFLICT(phone) DO UPDATE SET first_name=CASE WHEN EXCLUDED.first_name<>'' THEN EXCLUDED.first_name ELSE users.first_name END,
       last_name=CASE WHEN EXCLUDED.last_name<>'' THEN EXCLUDED.last_name ELSE users.last_name END,updated_at=NOW() RETURNING id,role,is_active`, [draft.phone, draft.firstName, draft.lastName]);
     if (userRes.rows[0].role === 'admin') {
       req.session.loginDraft = null;
       req.session.devOtp = null;
-      setFlash(req, 'info', 'حساب کاربری عادی مجوز مدیریت ندارد؛ از نام کاربری و گذرواژهٔ اختصاصی مدیر استفاده کنید.');
+      setFlash(req, 'info', res.locals.t('flash.auth.needsAdminLogin'));
       return res.redirect('/admin/login');
     }
     if (!userRes.rows[0].is_active) {
       req.session.loginDraft = null;
-      setFlash(req, 'error', 'این حساب کاربری غیرفعال شده است. با پشتیبانی تماس بگیرید.');
+      setFlash(req, 'error', res.locals.t('flash.auth.accountDisabled'));
       return res.redirect('/login');
     }
     const returnTo = safeNextPath(req.session.returnTo, '/account');
     await new Promise((resolve, reject) => req.session.regenerate(err => err ? reject(err) : resolve()));
     req.session.userId = userRes.rows[0].id;
     req.session.csrfToken = crypto.randomBytes(32).toString('hex');
-    setFlash(req, 'success', 'با موفقیت وارد حساب کاربری شدید.');
+    setFlash(req, 'success', res.locals.t('flash.auth.signedIn'));
     res.redirect(returnTo);
   }));
   app.post('/logout', (req, res) => req.session.destroy(() => { res.clearCookie(SESSION_COOKIE); res.redirect('/'); }));
@@ -737,16 +742,16 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
       pool.query('SELECT * FROM orders WHERE user_id=$1 ORDER BY created_at DESC LIMIT 30', [req.user.id]),
       pool.query("SELECT p.*, MAX(o.paid_at) AS paid_at, COALESCE((SELECT json_agg(json_build_object('id',a.id,'title',a.title,'asset_kind',a.asset_kind) ORDER BY a.sort_order,a.id) FROM product_assets a WHERE a.product_id=p.id),'[]'::json) AS assets FROM products p JOIN order_items oi ON oi.product_id=p.id JOIN orders o ON o.id=oi.order_id WHERE o.user_id=$1 AND o.status='paid' GROUP BY p.id ORDER BY MAX(o.paid_at) DESC", [req.user.id])
     ]);
-    res.render('account', { title: 'حساب کاربری', orders: orders.rows, library: library.rows });
+    res.render('account', { title: res.locals.t('page.account'), orders: orders.rows, library: library.rows });
   }));
   app.post('/account/profile', requireAuth, asyncRoute(async (req, res) => {
     const firstName = normalizeText(req.body.firstName, 100);
     const lastName = normalizeText(req.body.lastName, 100);
     const branch = ['', 'نظارت', 'طراحی', 'اجرا'].includes(req.body.branch) ? req.body.branch : '';
     const field = ['', 'مهندسی مکانیک', 'مهندسی برق', 'مهندسی عمران', 'مهندسی معماری', 'سایر'].includes(req.body.field) ? req.body.field : '';
-    if (!firstName || !lastName) { setFlash(req, 'error', 'نام و نام خانوادگی الزامی است.'); return res.redirect('/account#profile'); }
+    if (!firstName || !lastName) { setFlash(req, 'error', res.locals.t('flash.account.nameRequired')); return res.redirect('/account#profile'); }
     await pool.query('UPDATE users SET first_name=$1,last_name=$2,branch=$3,field=$4,updated_at=NOW() WHERE id=$5', [firstName, lastName, branch, field, req.user.id]);
-    setFlash(req, 'success', 'پروفایل به‌روزرسانی شد.'); res.redirect('/account#profile');
+    setFlash(req, 'success', res.locals.t('flash.account.profileUpdated')); res.redirect('/account#profile');
   }));
 
   // ───────────── Customer support tickets (no email notifications; in-app only) ─────────────
@@ -755,15 +760,15 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
   const TICKET_STATUSES = ['open', 'pending', 'answered', 'closed'];
   app.get('/account/tickets', requireAuth, asyncRoute(async (req, res) => {
     const r = await pool.query('SELECT * FROM tickets WHERE user_id=$1 ORDER BY created_at DESC', [req.user.id]);
-    res.render('tickets', { title: 'پشتیبانی', tickets: r.rows });
+    res.render('tickets', { title: res.locals.t('page.tickets'), tickets: r.rows });
   }));
-  app.get('/account/tickets/new', requireAuth, (_req, res) => res.render('ticket-new', { title: 'درخواست جدید' }));
+  app.get('/account/tickets/new', requireAuth, (_req, res) => res.render('ticket-new', { title: res.locals.t('page.ticketNew') }));
   app.post('/account/tickets', requireAuth, asyncRoute(async (req, res) => {
     const subject = normalizeText(req.body.subject, 200);
     const message = normalizeText(req.body.message, 4000);
     const category = TICKET_CATEGORIES.includes(req.body.category) ? req.body.category : 'other';
     const priority = TICKET_PRIORITIES.includes(req.body.priority) ? req.body.priority : 'normal';
-    if (!subject || !message) { setFlash(req, 'error', 'موضوع و متن پیام الزامی است.'); return res.redirect('/account/tickets/new'); }
+    if (!subject || !message) { setFlash(req, 'error', res.locals.t('flash.tickets.subjectMessageRequired')); return res.redirect('/account/tickets/new'); }
     const client = await pool.connect();
     let id;
     try {
@@ -773,7 +778,7 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
       await client.query('INSERT INTO ticket_messages(ticket_id,author_type,author_id,body) VALUES($1,\'user\',$2,$3)', [id, req.user.id, message]);
       await client.query('COMMIT');
     } catch (error) { await client.query('ROLLBACK').catch(() => {}); throw error; } finally { client.release(); }
-    setFlash(req, 'success', 'درخواست با موفقیت ثبت شد.');
+    setFlash(req, 'success', res.locals.t('flash.tickets.created'));
     res.redirect(`/account/tickets/${id}`);
   }));
   app.get('/account/tickets/:id', requireAuth, asyncRoute(async (req, res) => {
@@ -785,9 +790,9 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
   app.post('/account/tickets/:id/reply', requireAuth, asyncRoute(async (req, res) => {
     const t = await pool.query('SELECT * FROM tickets WHERE id=$1 AND user_id=$2', [req.params.id, req.user.id]);
     if (!t.rowCount) return renderError(res, 404, 'پیدا نشد', 'این درخواست پیدا نشد.');
-    if (t.rows[0].status === 'closed') { setFlash(req, 'error', 'این تیکت بسته شده و دیگر قابل پاسخ‌دهی نیست.'); return res.redirect(`/account/tickets/${req.params.id}`); }
+    if (t.rows[0].status === 'closed') { setFlash(req, 'error', res.locals.t('flash.tickets.closedCannotReply')); return res.redirect(`/account/tickets/${req.params.id}`); }
     const message = normalizeText(req.body.message, 4000);
-    if (!message) { setFlash(req, 'error', 'متن پاسخ الزامی است.'); return res.redirect(`/account/tickets/${req.params.id}`); }
+    if (!message) { setFlash(req, 'error', res.locals.t('flash.tickets.replyRequired')); return res.redirect(`/account/tickets/${req.params.id}`); }
     await pool.query('INSERT INTO ticket_messages(ticket_id,author_type,author_id,body) VALUES($1,\'user\',$2,$3)', [req.params.id, req.user.id, message]);
     await pool.query("UPDATE tickets SET status='pending',updated_at=NOW() WHERE id=$1", [req.params.id]);
     res.redirect(`/account/tickets/${req.params.id}`);
@@ -833,14 +838,14 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
     const orderId = digitsEnglish(req.query.orderId).trim();
     const authority = String(req.query.Authority || '').trim().slice(0, 100);
     const status = String(req.query.Status || '').toUpperCase();
-    if (!/^[1-9]\d{0,17}$/.test(orderId) || !authority) return res.status(400).render('payment-result', { title: 'پرداخت نامعتبر', ok: false, message: 'اطلاعات بازگشت از درگاه کامل نیست.' });
+    if (!/^[1-9]\d{0,17}$/.test(orderId) || !authority) return res.status(400).render('payment-result', { title: res.locals.t('payment.invalidTitle'), ok: false, message: res.locals.t('payment.invalidMessage') });
     const found = await pool.query('SELECT * FROM orders WHERE id=$1 AND authority=$2', [orderId, authority]);
-    if (!found.rowCount) return res.status(404).render('payment-result', { title: 'سفارش پیدا نشد', ok: false, message: 'سفارش متناظر با این پرداخت پیدا نشد.' });
+    if (!found.rowCount) return res.status(404).render('payment-result', { title: res.locals.t('payment.notFoundTitle'), ok: false, message: res.locals.t('payment.notFoundMessage') });
     const order = found.rows[0];
-    if (order.status === 'paid') return res.render('payment-result', { title: 'پرداخت موفق', ok: true, message: 'پرداخت قبلاً تأیید شده و محصول در کتابخانهٔ شما فعال است.' });
+    if (order.status === 'paid') return res.render('payment-result', { title: res.locals.t('payment.successTitle'), ok: true, message: res.locals.t('payment.alreadyConfirmed') });
     if (status !== 'OK' || order.status !== 'pending') {
       await pool.query("UPDATE orders SET status='failed',updated_at=NOW() WHERE id=$1 AND status='pending'", [order.id]);
-      return res.render('payment-result', { title: 'پرداخت انجام نشد', ok: false, message: 'پرداخت لغو شد یا توسط درگاه تأیید نشد. در صورت کسر وجه با پشتیبانی درگاه تماس بگیرید.' });
+      return res.render('payment-result', { title: res.locals.t('payment.failedTitle'), ok: false, message: res.locals.t('payment.failedMessage') });
     }
     try {
       const amountRial = Number(order.total_toman) * 10;
@@ -855,10 +860,10 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
         const fresh = await pool.query('SELECT status FROM orders WHERE id=$1', [order.id]);
         if (fresh.rows[0]?.status !== 'paid') throw new Error('Order state changed during verification');
       }
-      return res.render('payment-result', { title: 'پرداخت موفق', ok: true, message: `پرداخت تأیید شد. کد پیگیری: ${ref}. محصول در حساب کاربری فعال شده است.` });
+      return res.render('payment-result', { title: res.locals.t('payment.successTitle'), ok: true, message: `${res.locals.t('payment.confirmedPrefix')} ${ref}. ${res.locals.t('payment.confirmedSuffix')}` });
     } catch (err) {
       logger.error('payment verification failed', { requestId: req.id, orderId: order.id, error: err });
-      return res.status(502).render('payment-result', { title: 'تأیید پرداخت ناموفق', ok: false, message: 'در حال حاضر تأیید پرداخت از درگاه ممکن نشد. از تکرار پرداخت خودداری کنید و با پشتیبانی تماس بگیرید.' });
+      return res.status(502).render('payment-result', { title: res.locals.t('payment.verifyFailedTitle'), ok: false, message: res.locals.t('payment.verifyFailedMessage') });
     }
   }));
 
@@ -892,14 +897,14 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
   // ───────────── Admin authentication ─────────────
   app.get('/admin/login', (req, res) => {
     if (req.admin) return res.redirect(ROLE_HOME[req.admin.role] || '/admin');
-    res.render('admin/login', { title: 'ورود مدیر' });
+    res.render('admin/login', { title: res.locals.t('page.adminLogin') });
   });
   app.post('/admin/login', asyncRoute(async (req, res) => {
     const username = String(req.body.username || '').trim().toLowerCase().slice(0, 80);
     const password = String(req.body.password || '');
     const usernameKey = `admin-login:user:${username || 'invalid'}`;
     const ipKey = `admin-login:ip:${req.ip || 'unknown'}`;
-    const lockedMessage = 'به دلیل تلاش‌های ناموفق متعدد، ورود موقتاً مسدود شده است. حدود ۱۵ دقیقه بعد دوباره تلاش کنید.';
+    const lockedMessage = res.locals.t('flash.adminLogin.locked');
     // Atomic check-and-reserve: every attempt is counted before the password is checked, so a burst of
     // parallel requests cannot exceed the limit. A successful login removes the reservation again, which
     // means only failed attempts accumulate.
@@ -910,7 +915,7 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
         { key: ipKey, ...ADMIN_LOGIN_LIMITS.ip }
       ]);
     } catch (error) {
-      if (error instanceof ThrottleUnavailableError) { setFlash(req, 'error', 'سرویس ورود موقتاً در دسترس نیست. کمی بعد دوباره تلاش کنید.'); return res.redirect('/admin/login'); }
+      if (error instanceof ThrottleUnavailableError) { setFlash(req, 'error', res.locals.t('flash.adminLogin.serviceUnavailable')); return res.redirect('/admin/login'); }
       throw error;
     }
     if (!gate.allowed) {
@@ -927,7 +932,7 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
     if (!valid) {
       // The reservation made above stays in place and is this attempt's failure record.
       await writeAdminAudit(row.rowCount ? row.rows[0].id : null, 'admin.login.failure', req, 401);
-      setFlash(req, 'error', 'نام کاربری یا گذرواژه مدیر صحیح نیست.'); return res.redirect('/admin/login');
+      setFlash(req, 'error', res.locals.t('flash.adminLogin.invalidCredentials')); return res.redirect('/admin/login');
     }
     await throttle.clear(usernameKey);
     await throttle.release(gate.reservation, [ipKey]);
@@ -939,7 +944,7 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
     req.session.csrfToken = crypto.randomBytes(32).toString('hex');
     await pool.query('UPDATE admin_accounts SET last_login_at=NOW(),updated_at=NOW() WHERE id=$1', [row.rows[0].id]);
     await writeAdminAudit(row.rows[0].id, 'admin.login.success', req, 302);
-    setFlash(req, 'success', 'ورود مدیر موفق بود.'); res.redirect(ROLE_HOME[row.rows[0].role] || '/admin');
+    setFlash(req, 'success', res.locals.t('flash.adminLogin.success')); res.redirect(ROLE_HOME[row.rows[0].role] || '/admin');
   }));
   app.post('/admin/logout', requireAdmin, asyncRoute(async (req, res) => {
     await writeAdminAudit(req.admin.id, 'admin.logout', req, 302);
@@ -965,7 +970,7 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
       const hash = await bcrypt.hash(password, 12);
       const created = await pool.query('INSERT INTO admin_accounts(username,password_hash,role,created_by) VALUES($1,$2,$3,$4) RETURNING id', [username, hash, role, req.admin.id]);
       await writeAdminAudit(req.admin.id, `admin.account.create:${created.rows[0].id}:${role}`, req, 201);
-      setFlash(req, 'success', `حساب مدیریتی «${username}» با نقش ${ROLE_LABELS[role]} ساخته شد.`);
+      setFlash(req, 'success', `${res.locals.t('flash.admins.createdPart1')}${username}${res.locals.t('flash.admins.createdPart2')}${res.locals.roleLabels[role]}${res.locals.t('flash.admins.createdPart3')}`);
     } catch (error) {
       if (error.code === '23505') setFlash(req, 'error', 'این نام کاربری قبلاً ثبت شده است.');
       else throw error;
@@ -1092,7 +1097,7 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
       q(`SELECT (SELECT COUNT(*)::int FROM products WHERE status='draft') AS products, (SELECT COUNT(*)::int FROM articles WHERE status='draft') AS articles`)
     ]);
     const openTickets = hasPermission(req.admin.role, 'support') ? (await pool.query("SELECT COUNT(*)::int AS n FROM tickets WHERE status IN ('open','pending')")).rows[0].n : 0;
-    res.render('admin/dashboard', { title: 'مدیریت سایت', counts: counts[0], sales: sales[0], orders: recentOrders, audit: recentAudit, drafts: drafts[0], openTickets });
+    res.render('admin/dashboard', { title: res.locals.t('adminDash.title'), counts: counts[0], sales: sales[0], orders: recentOrders, audit: recentAudit, drafts: drafts[0], openTickets });
   }));
 
   // ───────────── Products ─────────────

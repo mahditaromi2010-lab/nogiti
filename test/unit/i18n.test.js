@@ -3,6 +3,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { resolveLocale, SUPPORTED, DEFAULT_LOCALE, i18nMiddleware } = require('../../src/lib/i18n');
 const { permissionForPath, hasPermission } = require('../../src/admin-security');
+const fa = require('../../src/locales/fa.json');
+const en = require('../../src/locales/en.json');
 
 test('resolveLocale only accepts supported locale codes', () => {
   assert.equal(resolveLocale('en'), 'en');
@@ -48,6 +50,21 @@ test('localizedField falls back to the Persian column when the English one is em
   assert.equal(res.locals.localizedField({ title: 'فا', title_en: 'EN' }, 'title', 'title_en'), 'EN');
   const fa = runMiddleware({ query: {}, headers: {} });
   assert.equal(fa.locals.localizedField({ title: 'فا', title_en: 'EN' }, 'title', 'title_en'), 'فا');
+});
+
+test('fa.json and en.json carry exactly the same set of keys (no locale can silently fall behind)', () => {
+  const faKeys = Object.keys(fa).sort();
+  const enKeys = Object.keys(en).sort();
+  const missingFromEn = faKeys.filter(k => !en[k] && en[k] !== '');
+  const missingFromFa = enKeys.filter(k => !fa[k] && fa[k] !== '');
+  assert.deepEqual(missingFromEn, [], `en.json is missing keys present in fa.json: ${missingFromEn.join(', ')}`);
+  assert.deepEqual(missingFromFa, [], `fa.json is missing keys present in en.json: ${missingFromFa.join(', ')}`);
+  assert.equal(faKeys.length, enKeys.length);
+});
+
+test('every locale value is a non-empty string (no accidental null/undefined/empty entries)', () => {
+  for (const [key, value] of Object.entries(fa)) assert.equal(typeof value, 'string', `fa.json[${key}] should be a string`);
+  for (const [key, value] of Object.entries(en)) assert.equal(typeof value, 'string', `en.json[${key}] should be a string`);
 });
 
 test('the support permission exists and is granted only to the broad admin roles', () => {

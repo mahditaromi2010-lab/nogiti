@@ -1,21 +1,85 @@
 /* Transferred from the supplied Nogiti HTML baseline. These table values need technical review against the current official regulation before production use. */
+
+// Minimal client-side text table for the few dynamic result/validation strings these calculators
+// build at runtime (numbers mixed into sentences can't go through the server's t() helper, which
+// only resolves a page's static copy). Mirrors the fa/en split in src/locales/*.json; the active
+// locale is set by the page itself via window.NG_LOCALE (see views/tools.ejs).
+const NG_LOCALE = (typeof window !== 'undefined' && window.NG_LOCALE === 'en') ? 'en' : 'fa';
+const NG_TEXT = {
+  invalidPositive: { fa: 'لطفاً مقادیر معتبر و مثبت وارد کنید.', en: 'Please enter valid, positive values.' },
+  invalidChimney: { fa: 'لطفاً مقادیر معتبر وارد کنید (ارتفاع و مصرف مثبت، طول می‌تواند صفر باشد).', en: 'Please enter valid values (height and load must be positive; connector length can be zero).' },
+  invalidConsumption: { fa: 'لطفاً یک مصرف معتبر وارد کنید.', en: 'Please enter a valid gas load.' },
+  meterRangeError: { fa: 'مصرف باید بین ۰.۱ تا ۱۰۰ مترمکعب بر ساعت باشد.', en: 'Load must be between 0.1 and 100 m³/h.' },
+  ventInitialValues: { fa: 'مقادیر اولیه:', en: 'Starting values:' },
+  ventVolume: { fa: 'حجم هوا (V)', en: 'Air volume (V)' },
+  ventHeat: { fa: 'ارزش حرارتی (Q)', en: 'Heat input (Q)' },
+  ventRoomStatus: { fa: 'وضعیت فضا', en: 'Room classification' },
+  ventUnconfined: { fa: 'نامحدود (Unconfined)', en: 'Unconfined' },
+  ventConfined: { fa: 'محدود (Confined)', en: 'Confined' },
+  ventDimensions: { fa: 'ابعاد و ظرفیت‌ها:', en: 'Required sizes:' },
+  ventOneFixedLouver: { fa: 'ابعاد یک دریچه ثابت', en: 'Single fixed louver, free area' },
+  ventTwoFixedLouvers: { fa: 'ابعاد دو دریچه ثابت', en: 'Two fixed louvers, free area each' },
+  ventHorizontalDuct: { fa: 'ابعاد یک کانال افقی', en: 'Horizontal duct, free area' },
+  ventVerticalDuct: { fa: 'ابعاد یک کانال قائم', en: 'Vertical duct, free area' },
+  ventMechanicalFan: { fa: 'ظرفیت فن مکانیکی', en: 'Mechanical fan capacity' },
+  pipeRequired: { fa: 'قطر لوله مورد نیاز', en: 'Required pipe diameter' },
+  pipeBasedOn: { fa: (l, c) => `(بر اساس طول ${l} متر و ظرفیت ${c} m³/h)`, en: (l, c) => `(based on a ${l} m run and a ${c} m³/h capacity)` },
+  hpLengthOverMax: { fa: l => `⚠️ طول لوله (${l} متر) از حداکثر طول جدول (۶۰۰ متر) بیشتر است.`, en: l => `⚠️ The pipe run (${l} m) exceeds the table's maximum length (600 m).` },
+  hpOverCapacity: { fa: (c, max, len) => `❌ مصرف وارد شده (${c} m³/h) بیشتر از حداکثر ظرفیت مجاز جدول (${max} m³/h) برای طول ${len} متر می‌باشد.`, en: (c, max, len) => `❌ The entered load (${c} m³/h) exceeds the table's maximum capacity (${max} m³/h) for a ${len} m run.` },
+  hpResult: { fa: (d, len, cap) => `✅ قطر لوله مورد نیاز: <strong>${d}</strong><br><small>(بر اساس طول ${len} متر و ظرفیت ${cap} m³/h)</small>`, en: (d, len, cap) => `✅ Required pipe diameter: <strong>${d}</strong><br><small>(based on a ${len} m run and a ${cap} m³/h capacity)</small>` },
+  chimneyHeightOverMax: { fa: h => `⚠️ ارتفاع وارد شده از حداکثر مجاز (${h} متر) بیشتر است.`, en: h => `⚠️ The entered height exceeds the maximum allowed (${h} m).` },
+  chimneyLengthNotAllowed: { fa: (len, h, max) => `⚠️ طول لوله ${len} متر برای دودکش با ارتفاع ${h} متر غیرمجاز است. لطفاً طول کوتاه‌تری وارد کنید (حداکثر: ${max} متر).`, en: (len, h, max) => `⚠️ A ${len} m connector pipe is not valid for a ${h} m flue. Please enter a shorter length (maximum: ${max} m).` },
+  chimneyResult: { fa: (d, h, len, cap) => `✅ قطر دودکش مورد نیاز: <strong>${d}</strong><br><small>(ارتفاع دودکش: ${h} متر | طول لوله رابط: ${len} متر | ظرفیت محاسبه‌شده: ${cap} هزار kcal/h)</small>`, en: (d, h, len, cap) => `✅ Required flue diameter: <strong>${d}</strong><br><small>(flue height: ${h} m | connector length: ${len} m | computed load: ${cap} thousand kcal/h)</small>` },
+  chimneyNoMatch: { fa: (h, len, suggestion) => `❌ با ارتفاع ${h} متر و طول لوله ${len} متر، هیچ قطری جوابگو نیست. این ترکیب مجاز نمی‌باشد.${suggestion}`, en: (h, len, suggestion) => `❌ No diameter satisfies a ${h} m flue with a ${len} m connector. This combination is not allowed.${suggestion}` },
+  chimneySuggestion: { fa: len => ` پیشنهاد می‌شود لوله رابط ${len} متری یا کوتاه‌تر را امتحان کنید.`, en: len => ` Try a connector pipe of ${len} m or shorter.` },
+  chimneyReduceLoad: { fa: ' لطفاً مصرف دستگاه را کاهش دهید.', en: ' Please reduce the appliance load.' },
+  meterClass: { fa: 'رده کنتور', en: 'Meter class' },
+  meterWallDistance: { fa: 'فاصله کنتور از دیوار', en: 'Clearance from wall' },
+  meterSubstituteLength: { fa: 'طول جانشین کنتور', en: 'Meter bypass (substitute) length' },
+  meterSubstituteDiameter: { fa: 'قطر لوله جانشین کنتور', en: 'Meter bypass pipe diameter' },
+  meterHeight: { fa: 'ارتفاع کنتور', en: 'Meter mounting height' },
+  meterHeightRange: { fa: '180 cm الی 220 cm', en: '180 cm to 220 cm' },
+  g25OutOfRange: { fa: c => `⚠️ این مقدار مصرف (${c} مترمکعب بر ساعت) هنوز در جدول قوانین این ابزار پوشش داده نشده است؛ مشخصاتی نمایش داده نمی‌شود تا داده نادرست ارائه نشود.`, en: c => `⚠️ A load of ${c} m³/h is not yet covered by this tool's rule table, so no specification is shown here rather than risk an incorrect one.` },
+  g25SubstituteLength: { fa: 'طول لوله جانشین', en: 'Bypass pipe length' },
+  g25SubstituteDiameter: { fa: 'قطر لوله جانشین', en: 'Bypass pipe diameter' },
+  g25Spacing: { fa: 'فاصله', en: 'Clearance' },
+  g25Height: { fa: 'ارتفاع', en: 'Mounting height' },
+  g25HeightRange: { fa: (min, max) => `${min} cm الی ${max} cm`, en: (min, max) => `${min} cm to ${max} cm` },
+  pipeOverTableMax: { fa: 'طول واردشده از بیشینهٔ طول جدول موجود در فایل پایه (۳۰۰ متر) بیشتر است؛ محاسبه‌ای ارائه نمی‌شود.', en: 'The entered length exceeds this table’s maximum (300 m); no result can be given.' },
+  pipeOverCapacity: { fa: 'مصرف واردشده از ظرفیت بیشینهٔ موجود در جدول برای طول انتخابی بیشتر است؛ قطر را نمی‌توان از این جدول تعیین کرد.', en: 'The entered load exceeds this table’s maximum capacity for the matched run length; no diameter can be determined from this table.' },
+  pipeInvalidLength: { fa: 'لطفاً طول و مصرف معتبر و مثبت وارد کنید.', en: 'Please enter a valid, positive length and load.' },
+  liquidPerHour: { fa: 'لیتر بر ساعت', en: 'L/h' },
+  kgPerHour: { fa: 'kg/h', en: 'kg/h' },
+  factorConversion: { fa: (f, f2) => `ضریب تبدیل: <b id="factorDisplay">${f}</b> (معادل گاز طبیعی: <b id="factorDisplay2">${f2}</b> مترمکعب)`, en: (f, f2) => `Conversion factor: <b id="factorDisplay">${f}</b> (natural gas equivalent: <b id="factorDisplay2">${f2}</b> m³)` }
+};
+function tr(key, ...args) {
+  const entry = NG_TEXT[key];
+  if (!entry) return key;
+  const v = entry[NG_LOCALE] ?? entry.fa;
+  return typeof v === 'function' ? v(...args) : v;
+}
+const chimneyDiametersByLocale = {
+  fa: ["10 سانتی‌متر", "15 سانتی‌متر", "20 سانتی‌متر", "25 سانتی‌متر", "30 سانتی‌متر"],
+  en: ["10 cm", "15 cm", "20 cm", "25 cm", "30 cm"]
+};
+
 function calculateVentilation() {
     const area = parseFloat(document.getElementById('area').value);
     const height = parseFloat(document.getElementById('height').value);
     const cons = parseFloat(document.getElementById('deviceConsumption').value);
     if (!area || !height || !cons || area <= 0 || height <= 0 || cons <= 0) {
-        alert('لطفاً مقادیر معتبر و مثبت وارد کنید.'); return;
+        alert(tr('invalidPositive')); return;
     }
     const V = area * height, Q = cons * 9500, threshold = Q / 178, unconfined = (V > threshold);
-    let html = `<strong>🔹 مقادیر اولیه:</strong><br>
-        • حجم هوا (V): ${V.toFixed(2)} m³<br>
-        • ارزش حرارتی (Q): ${Q.toFixed(2)} kcal/h<br>
-        • وضعیت فضا: <strong>${unconfined ? 'نامحدود (Unconfined)' : 'محدود (Confined)'}</strong><br><br><strong>🔸 ابعاد و ظرفیت‌ها:</strong><br>`;
-    if (unconfined) html += `• ابعاد یک دریچه ثابت: ${(Q / 117).toFixed(2)} cm²<br>`;
-    html += `• ابعاد دو دریچه ثابت: ${(Q / 156).toFixed(2)} cm²<br>
-        • ابعاد یک کانال افقی: ${(Q / 78).toFixed(2)} cm²<br>
-        • ابعاد یک کانال قائم: ${(Q / 156).toFixed(2)} cm²<br>
-        • ظرفیت فن مکانیکی: ${(Q / 424).toFixed(2)} m³/h`;
+    let html = `<strong>🔹 ${tr('ventInitialValues')}</strong><br>
+        • ${tr('ventVolume')}: ${V.toFixed(2)} m³<br>
+        • ${tr('ventHeat')}: ${Q.toFixed(2)} kcal/h<br>
+        • ${tr('ventRoomStatus')}: <strong>${unconfined ? tr('ventUnconfined') : tr('ventConfined')}</strong><br><br><strong>🔸 ${tr('ventDimensions')}</strong><br>`;
+    if (unconfined) html += `• ${tr('ventOneFixedLouver')}: ${(Q / 117).toFixed(2)} cm²<br>`;
+    html += `• ${tr('ventTwoFixedLouvers')}: ${(Q / 156).toFixed(2)} cm²<br>
+        • ${tr('ventHorizontalDuct')}: ${(Q / 78).toFixed(2)} cm²<br>
+        • ${tr('ventVerticalDuct')}: ${(Q / 156).toFixed(2)} cm²<br>
+        • ${tr('ventMechanicalFan')}: ${(Q / 424).toFixed(2)} m³/h`;
     document.getElementById('ventResult').innerHTML = html;
     document.getElementById('ventResult').classList.add('show');
 }
@@ -23,7 +87,7 @@ function calculateVentilation() {
 function calculatePipeSize() {
     const length = parseFloat(document.getElementById('pipeLength').value);
     const cons = parseFloat(document.getElementById('consumption').value);
-    if (!length || !cons || length <= 0 || cons <= 0) { alert('لطفاً مقادیر معتبر و مثبت وارد کنید.'); return; }
+    if (!length || !cons || length <= 0 || cons <= 0) { alert(tr('invalidPositive')); return; }
     const table = {
         2: { 5.9: '1/2"', 12.3: '3/4"', 23.3: '1"', 47.9: '1 1/4"', 72.0: '1 1/2"', 138.3: '2"', 220.0: '2 1/2"', 390.7: '3"', 801.9: '4"' },
         4: { 4.0: '1/2"', 8.5: '3/4"', 16.0: '1"', 32.9: '1 1/4"', 49.4: '1 1/2"', 95.1: '2"', 151.2: '2 1/2"', 268.5: '3"', 551.1: '4"' },
@@ -53,11 +117,13 @@ function calculatePipeSize() {
     const capMap = table[selLength];
     const caps = Object.keys(capMap).map(Number).sort((a, b) => a - b);
     let selCap = caps.find(c => c >= cons) || caps[caps.length - 1];
-    document.getElementById('pipeResult').innerHTML = `قطر لوله مورد نیاز: <strong>${capMap[selCap]}</strong><br>(بر اساس طول ${selLength} متر و ظرفیت ${selCap} m³/h)`;
-    document.getElementById('pipeResult').classList.add('show');
+    const pipeResultEl = document.getElementById('pipeResult');
+    pipeResultEl.innerHTML = `${tr('pipeRequired')}: <strong>${capMap[selCap]}</strong><br>${tr('pipeBasedOn', selLength, selCap)}`;
+    pipeResultEl.dataset.matchedCapacity = String(selCap);
+    pipeResultEl.classList.add('show');
 }
 
-// ========== قطر لوله گاز (فشار قوی) - جدول پ-4-4 ==========
+// ========== High-pressure gas pipe diameter - table پ-4-4 ==========
 const hpTable = [
     { length: 15, caps: [16, 30, 62, 93, 180, 276, 418, 725, 1657] },
     { length: 20, caps: [11, 21, 43, 64, 124, 217, 375, 725, 1657] },
@@ -85,7 +151,7 @@ function calculateHighPressurePipe() {
     const res = document.getElementById('hpPipeResult');
 
     if (!length || !cons || length <= 0 || cons <= 0) {
-        alert('لطفاً مقادیر معتبر و مثبت وارد کنید.');
+        alert(tr('invalidPositive'));
         return;
     }
 
@@ -95,7 +161,7 @@ function calculateHighPressurePipe() {
     } else {
         selRow = hpTable.find(r => r.length >= length);
         if (!selRow) {
-            res.innerHTML = `⚠️ طول لوله (${length} متر) از حداکثر طول جدول (۶۰۰ متر) بیشتر است.`;
+            res.innerHTML = tr('hpLengthOverMax', length);
             res.classList.add('show');
             return;
         }
@@ -113,19 +179,16 @@ function calculateHighPressurePipe() {
 
     if (selDiameter === null) {
         const maxCap = selRow.caps[selRow.caps.length - 1];
-        res.innerHTML = `❌ مصرف وارد شده (${cons} m³/h) بیشتر از حداکثر ظرفیت مجاز جدول (${maxCap} m³/h) برای طول ${selRow.length} متر می‌باشد.`;
+        res.innerHTML = tr('hpOverCapacity', cons, maxCap, selRow.length);
         res.classList.add('show');
         return;
     }
 
-    res.innerHTML = `
-        ✅ قطر لوله مورد نیاز: <strong>${selDiameter}</strong><br>
-        <small>(بر اساس طول ${selRow.length} متر و ظرفیت ${selCapacity} m³/h)</small>
-    `;
+    res.innerHTML = tr('hpResult', selDiameter, selRow.length, selCapacity);
     res.classList.add('show');
 }
 
-// ========== جدول دقیق 17-4-5 (قطر دودکش) ==========
+// ========== Exact table 17-4-5 (flue diameter) ==========
 const chimneyTable = [
     { height: 3, length: 0, capacities: [21.20, 51.00, 93.90, 153.00, 230.30] },
     { height: 3, length: 0.6, capacities: [16.90, 42.40, 78.50, 127.50, 191.90] },
@@ -154,23 +217,22 @@ const chimneyTable = [
     { height: 15, length: 9, capacities: [null, null, 83.30, 152.80, 255.10] }
 ];
 
-const chimneyDiameters = ["10 سانتی‌متر", "15 سانتی‌متر", "20 سانتی‌متر", "25 سانتی‌متر", "30 سانتی‌متر"];
-
 function calculateChimney() {
     const height = parseFloat(document.getElementById('chimneyHeight').value);
     const length = parseFloat(document.getElementById('chimneyLength').value);
     const cons = parseFloat(document.getElementById('chimneyConsumption').value);
 
     if (!Number.isFinite(height) || !Number.isFinite(length) || !Number.isFinite(cons) || height <= 0 || cons <= 0 || length < 0) {
-        alert('لطفاً مقادیر معتبر وارد کنید (ارتفاع و مصرف مثبت، طول می‌تواند صفر باشد).');
+        alert(tr('invalidChimney'));
         return;
     }
 
     const requiredCapacity = cons * 9.5;
+    const chimneyDiameters = chimneyDiametersByLocale[NG_LOCALE] || chimneyDiametersByLocale.fa;
 
     const heights = [...new Set(chimneyTable.map(r => r.height))].sort((a, b) => a - b);
     if (height > heights[heights.length - 1]) {
-        document.getElementById('chimneyResult').innerHTML = `⚠️ ارتفاع وارد شده از حداکثر مجاز (${heights[heights.length - 1]} متر) بیشتر است.`;
+        document.getElementById('chimneyResult').innerHTML = tr('chimneyHeightOverMax', heights[heights.length - 1]);
         document.getElementById('chimneyResult').classList.add('show');
         return;
     }
@@ -182,7 +244,7 @@ function calculateChimney() {
     let selLength = lengths.find(l => l >= length);
 
     if (selLength === undefined) {
-        document.getElementById('chimneyResult').innerHTML = `⚠️ طول لوله ${length} متر برای دودکش با ارتفاع ${selHeight} متر غیرمجاز است. لطفاً طول کوتاه‌تری وارد کنید (حداکثر: ${lengths[lengths.length - 1]} متر).`;
+        document.getElementById('chimneyResult').innerHTML = tr('chimneyLengthNotAllowed', length, selHeight, lengths[lengths.length - 1]);
         document.getElementById('chimneyResult').classList.add('show');
         return;
     }
@@ -199,22 +261,19 @@ function calculateChimney() {
 
     const res = document.getElementById('chimneyResult');
     if (selectedDiameter) {
-        res.innerHTML = `
-            ✅ قطر دودکش مورد نیاز: <strong>${selectedDiameter}</strong><br>
-            <small>(ارتفاع دودکش: ${selHeight} متر | طول لوله رابط: ${selLength} متر | ظرفیت محاسبه‌شده: ${requiredCapacity.toFixed(1)} هزار kcal/h)</small>
-        `;
+        res.innerHTML = tr('chimneyResult', selectedDiameter, selHeight, selLength, requiredCapacity.toFixed(1));
     } else {
         let suggestion = '';
         const shorterLengths = lengths.filter(l => l < selLength).reverse();
         for (let len of shorterLengths) {
             const checkRow = rows.find(r => r.length === len);
             if (checkRow && checkRow.capacities.some(cap => cap !== null && cap >= requiredCapacity)) {
-                suggestion = ` پیشنهاد می‌شود لوله رابط ${len} متری یا کوتاه‌تر را امتحان کنید.`;
+                suggestion = tr('chimneySuggestion', len);
                 break;
             }
         }
-        if (!suggestion) suggestion = ' لطفاً مصرف دستگاه را کاهش دهید.';
-        res.innerHTML = `❌ با ارتفاع ${selHeight} متر و طول لوله ${selLength} متر، هیچ قطری جوابگو نیست. این ترکیب مجاز نمی‌باشد.${suggestion}`;
+        if (!suggestion) suggestion = tr('chimneyReduceLoad');
+        res.innerHTML = tr('chimneyNoMatch', selHeight, selLength, suggestion);
     }
     res.classList.add('show');
 }
@@ -226,7 +285,7 @@ function updateFactorDisplay() {
     const f = parseFloat(fuelSelect.value);
     document.getElementById('factorDisplay').textContent = f;
     document.getElementById('factorDisplay2').textContent = f;
-    document.getElementById('liquidUnit').textContent = fuelSelect.value === '1.0' ? 'kg/h' : 'lit/h';
+    document.getElementById('liquidUnit').textContent = fuelSelect.value === '1.0' ? tr('kgPerHour') : tr('liquidPerHour');
 }
 fuelSelect.addEventListener('change', () => {
     updateFactorDisplay();
@@ -248,7 +307,7 @@ updateFactorDisplay();
 function calculateMeter() {
     const c = parseFloat(document.getElementById('meterConsumption').value);
     const res = document.getElementById('meterResult');
-    if (isNaN(c) || c <= 0) { res.innerHTML = 'لطفاً یک مصرف معتبر وارد کنید.'; res.classList.add('show'); return; }
+    if (isNaN(c) || c <= 0) { res.innerHTML = tr('invalidConsumption'); res.classList.add('show'); return; }
 
     let meter, wall, length, diam;
     if (c >= 0.1 && c <= 6) {
@@ -266,16 +325,16 @@ function calculateMeter() {
     } else if (c >= 65.1 && c <= 100) {
         meter = 'G65'; wall = '30 cm'; length = '68 cm'; diam = '2"';
     } else {
-        res.innerHTML = '⚠️ مصرف باید بین ۰.۱ تا ۱۰۰ مترمکعب بر ساعت باشد.';
+        res.innerHTML = tr('meterRangeError');
         res.classList.add('show'); return;
     }
 
     res.innerHTML = `
-        <strong>رده کنتور:</strong> ${meter}<br>
-        <strong>فاصله کنتور از دیوار:</strong> ${wall}<br>
-        <strong>طول جانشین کنتور:</strong> ${length}<br>
-        <strong>قطر لوله جانشین کنتور:</strong> ${diam}<br>
-        <strong>ارتفاع کنتور:</strong> 180 cm الی 220 cm
+        <strong>${tr('meterClass')}:</strong> ${meter}<br>
+        <strong>${tr('meterWallDistance')}:</strong> ${wall}<br>
+        <strong>${tr('meterSubstituteLength')}:</strong> ${length}<br>
+        <strong>${tr('meterSubstituteDiameter')}:</strong> ${diam}<br>
+        <strong>${tr('meterHeight')}:</strong> ${tr('meterHeightRange')}
     `;
     res.classList.add('show');
 }
@@ -289,18 +348,18 @@ const METER_RULES = [
 function calculateMeterG25() {
   const c = parseFloat(document.getElementById('meterG25Consumption').value);
   const res = document.getElementById('meterG25Result');
-  if (isNaN(c) || c <= 0) { res.innerHTML = 'لطفاً یک مصرف معتبر وارد کنید.'; res.classList.add('show'); return; }
+  if (isNaN(c) || c <= 0) { res.innerHTML = tr('invalidConsumption'); res.classList.add('show'); return; }
   const rule = METER_RULES.find(r => c >= r.min && c <= r.max);
   if (!rule) {
-    res.innerHTML = `⚠️ این مقدار مصرف (${c} مترمکعب بر ساعت) هنوز در جدول قوانین این ابزار پوشش داده نشده است؛ مشخصاتی نمایش داده نمی‌شود تا داده نادرست ارائه نشود.`;
+    res.innerHTML = tr('g25OutOfRange', c);
     res.classList.add('show'); return;
   }
   res.innerHTML = `
-      <strong>رده کنتور:</strong> ${rule.type}<br>
-      <strong>طول لوله جانشین:</strong> ${rule.pipeLengthCm} cm<br>
-      <strong>قطر لوله جانشین:</strong> ${rule.pipeDiameterInch}"<br>
-      <strong>فاصله:</strong> ${rule.spacingCm} cm<br>
-      <strong>ارتفاع:</strong> ${rule.heightCmMin} cm الی ${rule.heightCmMax} cm
+      <strong>${tr('meterClass')}:</strong> ${rule.type}<br>
+      <strong>${tr('g25SubstituteLength')}:</strong> ${rule.pipeLengthCm} cm<br>
+      <strong>${tr('g25SubstituteDiameter')}:</strong> ${rule.pipeDiameterInch}"<br>
+      <strong>${tr('g25Spacing')}:</strong> ${rule.spacingCm} cm<br>
+      <strong>${tr('g25Height')}:</strong> ${tr('g25HeightRange', rule.heightCmMin, rule.heightCmMax)}
   `;
   res.classList.add('show');
 }
@@ -323,17 +382,16 @@ calculatePipeSize = function () {
   const length = parseFloat(document.getElementById('pipeLength').value);
   const cons = parseFloat(document.getElementById('consumption').value);
   if (!Number.isFinite(length) || !Number.isFinite(cons) || length <= 0 || cons <= 0) {
-    alert('لطفاً طول و مصرف معتبر و مثبت وارد کنید.'); return;
+    alert(tr('pipeInvalidLength')); return;
   }
   if (length > 300) {
     const result = document.getElementById('pipeResult');
-    result.textContent = 'طول واردشده از بیشینهٔ طول جدول موجود در فایل پایه (۳۰۰ متر) بیشتر است؛ محاسبه‌ای ارائه نمی‌شود.';
+    result.textContent = tr('pipeOverTableMax');
     result.classList.add('show'); return;
   }
   oldCalculatePipeSize();
   const result = document.getElementById('pipeResult');
-  if (result && result.textContent.includes('بر اساس طول')) {
-    const match = result.textContent.match(/ظرفیت ([0-9.]+) m³\/h/);
-    if (match && cons > Number(match[1])) { result.innerHTML = 'مصرف واردشده از ظرفیت بیشینهٔ موجود در جدول برای طول انتخابی بیشتر است؛ قطر را نمی‌توان از این جدول تعیین کرد.'; }
+  if (result && result.dataset.matchedCapacity && cons > Number(result.dataset.matchedCapacity)) {
+    result.innerHTML = tr('pipeOverCapacity');
   }
 };

@@ -1,17 +1,17 @@
 <%- include('../partials/header', {title}) %><div class="admin-shell"><%- include('../partials/admin-nav') %><div class="admin-content">
-<div class="admin-topbar"><div><span class="section-kicker">HORMOZGAN COVERAGE MAP</span><h1>مناطق نقشهٔ هرمزگان</h1><p>این رکوردها منبع دادهٔ صفحهٔ عمومی <a href="/coverage-map" target="_blank" rel="noopener">نقشهٔ هرمزگان</a> و endpoint داده (<code dir="ltr">/api/coverage-areas</code>) هستند. تا زمانی که «داده نمایشی/آزمایشی» تیک‌خورده باشد، در نقشه با برچسب preliminary نمایش داده می‌شوند.</p></div><a href="/admin/coverage-areas/new" class="button button-primary button-small">＋ منطقهٔ جدید</a></div>
+<div class="admin-topbar"><div><span class="section-kicker">HORMOZGAN COVERAGE MAP</span><h1><%= t('adminCoverage.title') %></h1><p><%= t('adminCoverage.intro') %> <a href="/coverage-map" target="_blank" rel="noopener"><%= t('adminCoverage.mapLinkLabel') %></a> <%= t('adminCoverage.introMid') %> (<code dir="ltr">/api/coverage-areas</code>) <%= t('adminCoverage.introSuffix') %></p></div><a href="/admin/coverage-areas/new" class="button button-primary button-small">＋ <%= t('adminCoverage.newArea') %></a></div>
 <section class="admin-panel">
-  <div class="table-responsive"><table class="data-table"><caption class="sr-only">مناطق نقشهٔ هرمزگان</caption><thead><tr><th scope="col">نام پروژه</th><th scope="col">شهر</th><th scope="col">تعداد پروژه</th><th scope="col">وضعیت پروژه</th><th scope="col">وضعیت گاز</th><th scope="col">داده نمایشی</th><th scope="col">به‌روزرسانی</th><th scope="col"></th></tr></thead><tbody>
+  <div class="table-responsive"><table class="data-table"><caption class="sr-only"><%= t('adminCoverage.title') %></caption><thead><tr><th scope="col"><%= t('adminCoverage.colProjectName') %></th><th scope="col"><%= t('adminCoverage.colCity') %></th><th scope="col"><%= t('adminCoverage.colProjectCount') %></th><th scope="col"><%= t('adminCoverage.colProjectStatus') %></th><th scope="col"><%= t('adminCoverage.colGasStatus') %></th><th scope="col"><%= t('adminCoverage.colDemo') %></th><th scope="col"><%= t('adminCoverage.colUpdated') %></th><th scope="col"></th></tr></thead><tbody>
   <% areas.forEach(a => { %><tr>
     <td><b><%= a.project_name %></b><% if (a.district) { %><small class="table-sub"><%= a.district %></small><% } %></td>
     <td><%= a.city %></td>
     <td><%= a.project_count %></td>
     <td><span class="status-pill status-ticket-<%= a.project_status==='completed'?'closed':(a.project_status==='planned'?'open':'pending') %>"><%= projectStatusLabels[a.project_status] || a.project_status %></span></td>
     <td><%= gasStatusLabels[a.gas_service_status] || a.gas_service_status %></td>
-    <td><span class="status-pill <%= a.is_demo ? 'status-draft' : 'status-published' %>"><%= a.is_demo ? 'بله' : 'خیر' %></span></td>
-    <td><%= new Date(a.last_updated).toLocaleDateString('fa-IR') %></td>
-    <td><div class="row-actions"><a href="/admin/coverage-areas/<%= a.id %>/edit">ویرایش</a><form action="/admin/coverage-areas/<%= a.id %>/delete" method="post"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button type="submit" class="button-link danger-text" data-confirm="این منطقه از نقشه حذف شود؟ درخواست‌های مشاورهٔ مرتبط حذف نمی‌شوند اما ارجاعشان به این منطقه برداشته می‌شود." data-confirm-label="حذف کن">حذف</button></form></div></td>
+    <td><span class="status-pill <%= a.is_demo ? 'status-draft' : 'status-published' %>"><%= a.is_demo ? t('adminCoverage.yes') : t('adminCoverage.no') %></span></td>
+    <td><%= new Date(a.last_updated).toLocaleDateString(locale==='en'?'en-US':'fa-IR') %></td>
+    <td><div class="row-actions"><a href="/admin/coverage-areas/<%= a.id %>/edit"><%= t('adminCoverage.edit') %></a><form action="/admin/coverage-areas/<%= a.id %>/delete" method="post"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button type="submit" class="button-link danger-text" data-confirm="<%= t('adminCoverage.deleteConfirm') %>" data-confirm-label="<%= t('adminCoverage.deleteConfirmLabel') %>"><%= t('adminCoverage.delete') %></button></form></div></td>
   </tr><% }) %>
-  <% if (!areas.length) { %><tr><td colspan="8" class="table-empty">هنوز منطقه‌ای ثبت نشده است.</td></tr><% } %>
+  <% if (!areas.length) { %><tr><td colspan="8" class="table-empty"><%= t('adminCoverage.empty') %></td></tr><% } %>
   </tbody></table></div>
 </section></div></div><%- include('../partials/footer') %>
