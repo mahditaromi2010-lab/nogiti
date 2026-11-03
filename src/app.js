@@ -114,6 +114,13 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
   // Digital Asset Links: proves this domain and the Android (TWA) app share the same owner, required by
   // Chrome/Android for the installed app to open without a visible browser address bar.
   app.use('/.well-known', express.static(path.join(ROOT, 'public', '.well-known'), { index: false }));
+  // One-off hosting-account verification file requested by the panel (2026-11-03): must be reachable,
+  // empty, at the site root. A single dedicated route, not a root-wide static mount, so no other files
+  // become web-accessible.
+  app.get('/18239906.txt', (_req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.type('text/plain').send('');
+  });
 
   // Health endpoints (live/ready split from Paradigmshift HealthController). Mounted before sessions so probes never create sessions.
   app.get('/health', (_req, res) => res.json({ ok: true, service: 'nogiti-platform' }));
