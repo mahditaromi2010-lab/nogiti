@@ -1,7 +1,7 @@
 /* Hormozgan coverage map (item 7). Leaflet + OpenStreetMap tiles, vendored locally under /public/vendor/leaflet
    (no CDN script, consistent with the site's CSP which only allows scripts from 'self').
    Mirrors the filtering/colour logic in src/lib/coverage-filter.js (no bundler ships a shared module to the
-   browser here, same reasoning as the G2.5 rules table duplication in tools.js). */
+   browser here, so the client keeps its own copy of that logic). */
 (() => {
   const mapEl = document.getElementById('coverageMap');
   if (!mapEl || typeof L === 'undefined') return;
