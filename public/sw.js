@@ -2,7 +2,11 @@
 // Caches static assets so the app opens instantly and shows a friendly offline
 // page instead of a browser error when there's no connection. Does NOT cache
 // any HTML/API responses that depend on login state, cart, or admin data.
-const CACHE_NAME = 'nogiti-shell-v1';
+// Bump this version whenever a precached asset's *content* changes without its filename changing
+// (e.g. the logo file was replaced in place on 2026-11-04) - the version bump is what makes the
+// browser notice the service-worker file differs, reinstall it, and refresh the stale cached assets.
+// Without a bump, returning/installed-app users would keep seeing the old cached files indefinitely.
+const CACHE_NAME = 'nogiti-shell-v2';
 const OFFLINE_URL = '/offline.html';
 const PRECACHE = [
   OFFLINE_URL,
