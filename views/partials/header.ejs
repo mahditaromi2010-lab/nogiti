@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0b2e26">
+  <meta name="theme-color" content="#f3f6f2">
   <!-- Novingity site icons -->
   <link rel="icon" href="/public/favicon.ico" sizes="any">
   <link rel="icon" type="image/png" sizes="48x48" href="/public/favicon-48x48.png">
@@ -13,13 +13,14 @@
   <meta name="description" content="<%= typeof metaDescription !== 'undefined' && metaDescription ? metaDescription : t('meta.defaultDescription') %>">
   <title><%= title ? `${title} | ${siteName}` : `${siteName} | ${t('meta.defaultTitleSuffix')}` %></title>
   <link rel="preload" href="/public/fonts/Vazirmatn-Variable.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="/public/css/styles.css">
+  <link rel="stylesheet" href="/public/css/styles.css?v=<%= locals.assetVersion || '0' %>">
+  <link rel="stylesheet" href="/public/css/elevate.css?v=<%= locals.assetVersion || '0' %>">
   <%# Scroll-reveal content starts hidden and is shown by motion.js; without JavaScript it must simply be visible. %>
   <noscript><style>.reveal-on-scroll,.reveal-stagger .reveal-item{opacity:1!important;transform:none!important}</style></noscript>
-  <script defer src="/public/js/main.js"></script>
-  <script defer src="/public/js/motion.js"></script>
+  <script defer src="/public/js/main.js?v=<%= locals.assetVersion || '0' %>"></script>
+  <script defer src="/public/js/motion.js?v=<%= locals.assetVersion || '0' %>"></script>
 </head>
-<body>
+<body class="<%= String(locals.currentPath || '').startsWith('/admin') ? 'is-admin' : 'is-public' %>">
 <a class="skip-link" href="#main-content"><%= t('a11y.skipToContent') %></a>
 <header class="site-header">
   <div class="container nav-shell">

@@ -2,6 +2,13 @@
    item 2 UI/UX pass. Vanilla IntersectionObserver only (no animation library). Fully respects
    prefers-reduced-motion: reduce — in that case everything renders in its final state immediately. */
 (() => {
+  // Mark the current section in the main nav (styled as an underline in elevate.css).
+  const here = location.pathname.replace(/\/$/, '') || '/';
+  document.querySelectorAll('.main-nav a[href]').forEach(a => {
+    const href = a.getAttribute('href');
+    if (href !== '/' && (here === href || here.startsWith(href + '/'))) a.setAttribute('aria-current', 'page');
+  });
+
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   if (reduceMotion) {
@@ -14,6 +21,12 @@
     document.querySelectorAll('.reveal-on-scroll, .reveal-item, .flow-divider-svg').forEach(el => el.classList.add('is-visible'));
     return;
   }
+
+  // Hero gas-installation drawing (public/css/elevate.css): its gas-flow / flame loop is pure CSS; pause it
+  // while it is off-screen so it costs nothing when nobody is looking at it.
+  document.querySelectorAll('.hero-visual').forEach(visual => {
+    new IntersectionObserver(([entry]) => visual.classList.toggle('is-paused', !entry.isIntersecting)).observe(visual);
+  });
 
   // Simple sections / cards: fade + rise in, once, on first intersection.
   const revealTargets = document.querySelectorAll('.reveal-on-scroll, .flow-divider-svg');
