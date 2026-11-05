@@ -40,6 +40,28 @@ async function checkPage(page, url, label, expectStatus) {
   if (OUT) await page.screenshot({ path: path.join(OUT, `${label}${url.replace(/\//g, '_') || '_home'}.png`), fullPage: true });
 }
 
+// Visual overhaul (public/css/elevate.css): the hero drawing must be usable, accessible and calm under reduced motion.
+async function checkOverhaul(browser) {
+  const ctx = await browser.newContext({ viewport: { width: 1366, height: 900 } });
+  const page = await ctx.newPage();
+  await page.goto(`${BASE}/lang/fa?next=/`);
+  await page.focus('.gs-meter-link');
+  record(await page.evaluate(() => getComputedStyle(document.activeElement).outlineStyle !== 'none'), 'drawing meter link has a visible focus ring');
+  await Promise.all([page.waitForURL(/\/tools#meter$/, { timeout: 8000 }).catch(() => {}), page.keyboard.press('Enter')]);
+  record(page.url().endsWith('/tools#meter'), 'drawing meter link opens the meter tool', page.url());
+  await page.goto(`${BASE}/`);
+  const spaced = await page.$$eval('h1, h2, h3', els => els.filter(e => { const v = getComputedStyle(e).letterSpacing; return v !== 'normal' && parseFloat(v) !== 0; }).length);
+  record(spaced === 0, 'Persian headings have no letter-spacing (keeps letters joined)', String(spaced));
+  await ctx.close();
+  const calm = await browser.newContext({ viewport: { width: 1366, height: 900 }, reducedMotion: 'reduce' });
+  const p2 = await calm.newPage();
+  await p2.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+  const running = await p2.evaluate(() => document.getAnimations().filter(a => a.playState === 'running').length);
+  record(running === 0, 'reduced motion: nothing animates on the home page', String(running));
+  record(await p2.$$eval('.gs-pipe', els => els.every(e => parseFloat(getComputedStyle(e).strokeDashoffset) === 0)), 'reduced motion: drawing is shown complete');
+  await calm.close();
+}
+
 // Calculator regressions found in the 2026-11-05 QA pass.
 async function checkCalculators(browser) {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
@@ -117,6 +139,7 @@ async function checkCalculators(browser) {
       await context.close();
     }
     await checkCalculators(browser);
+    await checkOverhaul(browser);
   } finally { await browser.close(); }
   const failed = results.filter(r => !r.ok);
   console.log(`\n${results.length - failed.length} passed, ${failed.length} failed`);
