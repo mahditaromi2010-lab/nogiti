@@ -1,6 +1,9 @@
 <%- include('../partials/header', {title}) %><div class="admin-shell"><%- include('../partials/admin-nav') %><div class="admin-content">
 <div class="admin-topbar"><div><span class="section-kicker">OVERVIEW / Novingity</span><h1><%= t('adminDash.title') %></h1><p><%= t('adminDash.lead') %></p></div><a href="/" class="button button-outline button-small"><%= t('adminDash.viewSite') %> ↗</a></div>
 <% const numFmt = n => Number(n || 0).toLocaleString(locale==='en'?'en-US':'fa-IR'); const dateFmt = d => new Date(d).toLocaleDateString(locale==='en'?'en-US':'fa-IR'); %>
+<% if (locals.mapKey && can('content')) { const mk = mapKey; const mapLink = '<a class="text-link" href="/coverage-map">' + t('adminDash.mapPreview') + ' ←</a>'; %>
+<% if (mk.usable && mk.expiringSoon) { %><div class="admin-alert admin-alert-warn" role="status" data-map-key="expiring"><%= t('adminDash.mapKeyExpiring').replace('{days}', numFmt(Math.max(mk.daysLeft, 0))).replace('{date}', dateFmt(mk.expiresAt)) %> <%- mapLink %></div><% } else if (mk.configured && !mk.usable) { %><div class="admin-alert admin-alert-warn" role="status" data-map-key="expired"><%= t('adminDash.mapKeyExpired') %> <%- mapLink %></div><% } else if (!mk.configured && coverageMapEnabled) { %><div class="admin-alert" role="status" data-map-key="missing"><%= t('adminDash.mapKeyMissing') %></div><% } %>
+<% } %>
 <div class="admin-stats">
   <a class="stat-card" href="/admin/users?state=active"><span><%= t('adminDash.activeUsers') %></span><b><%= numFmt(counts.active_users) %></b><small><%= numFmt(counts.new_users_30d) %> <%= t('adminDash.newMembers30d') %></small><span class="stat-icon" aria-hidden="true">♙</span></a>
   <a class="stat-card" href="/admin/products?status=published"><span><%= t('adminDash.publishedProducts') %></span><b><%= numFmt(counts.published_products) %></b><small><%= numFmt(drafts.products) %> <%= t('adminDash.drafts') %></small><span class="stat-icon" aria-hidden="true">▤</span></a>

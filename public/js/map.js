@@ -1,191 +1,325 @@
-/* Hormozgan coverage map (item 7). Leaflet + OpenStreetMap tiles, vendored locally under /public/vendor/leaflet
-   (no CDN script, consistent with the site's CSP which only allows scripts from 'self').
-   Mirrors the filtering/colour logic in src/lib/coverage-filter.js (no bundler ships a shared module to the
-   browser here, so the client keeps its own copy of that logic). */
+/* Hormozgan coverage map — explorer (list + map + detail panel) and the linked consultation form.
+   Leaflet is vendored under /public/vendor/leaflet (the CSP only allows scripts from 'self').
+   Base-map tiles come from the server (#coverage-map-tiles): Map.ir when a valid key is configured, otherwise
+   CARTO/OpenStreetMap — see src/lib/map-tiles.js. All visible text comes from the page (#coverage-map-labels),
+   which reads it from src/locales/*.json, so this file holds no translations.
+   The filter rules mirror src/lib/coverage-filter.js (there is no bundler to share the module with the browser). */
 (() => {
   const mapEl = document.getElementById('coverageMap');
-  if (!mapEl || typeof L === 'undefined') return;
+  if (!mapEl) return;
 
-  // Mirrors the fa/en split in src/locales/*.json; locale is set by the page via window.NG_LOCALE
-  // (see views/coverage-map.ejs), same pattern as public/js/tools.js.
-  const MAP_LOCALE = document.documentElement.dataset.locale === 'en' ? 'en' : 'fa';
-  const MAP_TEXT = {
-    projectCountLabel: { fa: 'تعداد پروژه (نمونه)', en: 'Project count (sample)' },
-    projectStatusLabel: { fa: 'وضعیت پروژه', en: 'Project status' },
-    gasRiserStatusLabel: { fa: 'وضعیت رایزر گاز', en: 'Gas riser status' },
-    riserInstallLabel: { fa: 'نصب رایزر', en: 'Riser installed' },
-    riserLocationLabel: { fa: 'شناسایی محل رایزر', en: 'Riser location identified' },
-    plannedExpansionLabel: { fa: 'توسعهٔ آتی برنامه‌ریزی‌شده', en: 'Future expansion planned' },
-    servicesLabel: { fa: 'خدمات مهندسی موجود', en: 'Available engineering services' },
-    yes: { fa: 'بله', en: 'Yes' },
-    no: { fa: 'خیر', en: 'No' },
-    demoNote: { fa: '⚠ این رکورد نمونه/آزمایشی است و نشان‌دهندهٔ وضعیت تأییدشدهٔ واقعی نیست.', en: '⚠ This record is sample/preliminary data and does not represent a confirmed, real-world status.' },
-    requestForArea: { fa: 'درخواست مشاوره برای این منطقه', en: 'Request a consultation for this area' }
+  const readJson = (id, fallback) => {
+    try { return JSON.parse(document.getElementById(id)?.textContent || '') ?? fallback; } catch { return fallback; }
   };
-  function mt(key) { return MAP_TEXT[key][MAP_LOCALE]; }
-  const PROJECT_STATUS_LABELS = MAP_LOCALE === 'en'
-    ? { completed: 'Completed', in_progress: 'In progress', planned: 'Planned', under_review: 'Under review' }
-    : { completed: 'تکمیل‌شده', in_progress: 'در حال اجرا', planned: 'برنامه‌ریزی‌شده', under_review: 'در حال بررسی' };
-  const GAS_STATUS_LABELS = MAP_LOCALE === 'en'
-    ? { installed: 'Installed', not_installed: 'Not installed', planned: 'Planned', unknown: 'Unknown' }
-    : { installed: 'نصب‌شده', not_installed: 'نصب‌نشده', planned: 'برنامه‌ریزی‌شده', unknown: 'نامشخص' };
-  const RISER_STATUS_LABELS = GAS_STATUS_LABELS;
+  const areas = readJson('coverage-areas-data', []);
+  const ui = readJson('coverage-map-labels', {});
+  const tiles = readJson('coverage-map-tiles', null);
+  const D = ui.detail || {};
+  const locale = ui.locale === 'en' ? 'en' : 'fa';
+  const numberFormat = new Intl.NumberFormat(locale === 'en' ? 'en-US' : 'fa-IR');
+  const nf = n => numberFormat.format(Number(n) || 0);
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const byId = new Map(areas.map(a => [String(a.id), a]));
 
-  function statusColor(area) {
-    if (area.gasServiceStatus === 'installed') return '#10b981';
-    if (area.gasServiceStatus === 'planned' || area.projectStatus === 'planned') return '#f59e0b';
-    if (area.gasServiceStatus === 'not_installed' && area.riserInstallationStatus && area.riserInstallationStatus !== 'unknown') return '#2563eb';
-    return '#9ca3af';
+  const $ = id => document.getElementById(id);
+  const list = $('areaList');
+  const panel = $('mapInfoPanel');
+  const stage = mapEl.closest('.cm-stage');
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  // Search folds Arabic/Persian letter variants and digits so «كيش», «کیش» and «۱۲» / «12» all match.
+  const fold = s => String(s || '').toLowerCase()
+    .replace(/[يى]/g, 'ی').replace(/ك/g, 'ک').replace(/[ةۀ]/g, 'ه').replace(/[أإآ]/g, 'ا').replace(/‌/g, ' ')
+    .replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
+    .replace(/\s+/g, ' ').trim();
+
+  function tone(a) {
+    if (a.gasServiceStatus === 'installed') return 'green';
+    if (a.gasServiceStatus === 'planned' || a.projectStatus === 'planned') return 'orange';
+    if (a.gasServiceStatus === 'not_installed' && a.riserInstallationStatus && a.riserInstallationStatus !== 'unknown') return 'blue';
+    return 'gray';
   }
 
-  function filterAreas(areas, f) {
-    return areas.filter(a => {
-      if (f.city && a.city !== f.city) return false;
-      if (f.status && a.projectStatus !== f.status) return false;
-      if (f.gasService && a.gasServiceStatus !== f.gasService) return false;
-      if (f.riser && a.riserInstallationStatus !== f.riser) return false;
-      if (f.search && !(`${a.projectName} ${a.city} ${a.district}`.toLowerCase().includes(f.search.toLowerCase()))) return false;
-      return true;
-    });
+  /* ---------- filters ---------- */
+  const state = { status: '', city: '', gas: '', riser: '', search: '' };
+  function matches(a, f, ignoreStatus) {
+    if (!ignoreStatus && f.status && a.projectStatus !== f.status) return false;
+    if (f.city && a.city !== f.city) return false;
+    if (f.gas && a.gasServiceStatus !== f.gas) return false;
+    if (f.riser && a.riserInstallationStatus !== f.riser) return false;
+    if (f.search && !fold(`${a.projectName} ${a.city} ${a.district || ''} ${a.approximateLocation || ''}`).includes(fold(f.search))) return false;
+    return true;
   }
-  function summarize(areas) {
-    return {
-      totalProjects: areas.reduce((s, a) => s + (Number(a.projectCount) || 0), 0),
-      areasCount: areas.length,
-      completedProjects: areas.filter(a => a.projectStatus === 'completed').reduce((s, a) => s + (Number(a.projectCount) || 0), 0),
-      surveyedAreas: areas.filter(a => a.gasServiceStatus !== 'unknown').length,
-      plannedAreas: areas.filter(a => a.projectStatus === 'planned' || a.gasServiceStatus === 'planned').length
+  const activeFilterCount = () => Object.values(state).filter(Boolean).length;
+
+  /* ---------- map ---------- */
+  const leafletReady = typeof L !== 'undefined';
+  let map = null;
+  const markers = new Map();
+  if (leafletReady) {
+    mapEl.querySelector('.cm-canvas-loading')?.remove();
+    const hormozgan = L.latLngBounds([24.6, 51.8], [29.6, 60.2]);
+    map = L.map(mapEl, { scrollWheelZoom: false, maxBounds: hormozgan, maxBoundsViscosity: 0.8, minZoom: 6, zoomSnap: 0.5 });
+    map.setView([27.0, 56.3], 7);
+
+    let base = null;
+    const addTiles = cfg => {
+      if (base) map.removeLayer(base);
+      const opts = { attribution: cfg.attribution, maxZoom: cfg.maxZoom || 18, crossOrigin: false };
+      if (cfg.subdomains) opts.subdomains = cfg.subdomains;
+      base = L.tileLayer(cfg.url, opts).addTo(map);
+      mapEl.dataset.tileProvider = cfg.provider;
+      return base;
     };
-  }
-
-  let allAreas = [];
-  try { allAreas = JSON.parse(document.getElementById('coverage-areas-data').textContent || '[]'); } catch { allAreas = []; }
-  let labels = { requestTypeLabels: {}, projectStatusFormLabels: {} };
-  try { labels = JSON.parse(document.getElementById('coverage-map-labels').textContent || '{}'); } catch { /* ignore */ }
-
-  // One clean data-fetching function: uses the data already embedded in the page when there is no active
-  // filter (no extra request), and the live /api/coverage-areas endpoint when filters are applied — so a
-  // future real data source only has to change what that endpoint reads from, not this file.
-  const apiUrl = mapEl.dataset.areasApi || '/api/coverage-areas';
-  async function fetchCoverageAreas(filters) {
-    const hasFilter = Object.values(filters).some(Boolean);
-    if (!hasFilter) return allAreas;
-    const qs = new URLSearchParams();
-    if (filters.city) qs.set('city', filters.city);
-    if (filters.status) qs.set('status', filters.status);
-    if (filters.gasService) qs.set('gasService', filters.gasService);
-    if (filters.riser) qs.set('riser', filters.riser);
-    if (filters.search) qs.set('q', filters.search);
-    try {
-      const r = await fetch(`${apiUrl}?${qs.toString()}`);
-      if (!r.ok) throw new Error('bad status');
-      const data = await r.json();
-      return data.areas;
-    } catch {
-      return filterAreas(allAreas, filters); // offline-safe fallback: filter the embedded dataset client-side
-    }
-  }
-
-  const map = L.map('coverageMap', { scrollWheelZoom: false }).setView([27.2, 56.5], 8);
-  // Using CARTO's free basemap tiles (OSM data, redistributed under CARTO's more permissive
-  // usage policy) instead of tile.openstreetmap.org directly — OSM's own tile servers now
-  // actively block self-hosted apps that don't register with their heavy-usage policy, which
-  // showed as "403 Access blocked" tiles in production. CARTO's tiles require no API key.
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>',
-    maxZoom: 19,
-    subdomains: 'abcd'
-  }).addTo(map);
-  mapEl.addEventListener('click', () => map.scrollWheelZoom.enable(), { once: true });
-
-  let markers = L.layerGroup().addTo(map);
-  const panel = document.getElementById('mapInfoPanel');
-
-  function renderPanel(area) {
-    const reqOptions = Object.entries(labels.requestTypeLabels || {}).map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
-    panel.innerHTML = `
-      <div class="map-info-card">
-        <h3>${escapeHtml(area.projectName)}</h3>
-        <p class="map-info-location">${escapeHtml(area.city)}${area.district ? ' - ' + escapeHtml(area.district) : ''}</p>
-        <dl class="map-info-list">
-          <div><dt>${mt('projectCountLabel')}</dt><dd>${area.projectCount}</dd></div>
-          <div><dt>${mt('projectStatusLabel')}</dt><dd>${PROJECT_STATUS_LABELS[area.projectStatus] || area.projectStatus}</dd></div>
-          <div><dt>${mt('gasRiserStatusLabel')}</dt><dd>${GAS_STATUS_LABELS[area.gasServiceStatus] || area.gasServiceStatus}</dd></div>
-          <div><dt>${mt('riserInstallLabel')}</dt><dd>${RISER_STATUS_LABELS[area.riserInstallationStatus] || area.riserInstallationStatus}</dd></div>
-          <div><dt>${mt('riserLocationLabel')}</dt><dd>${area.riserLocations ? mt('yes') : mt('no')}</dd></div>
-          <div><dt>${mt('plannedExpansionLabel')}</dt><dd>${area.plannedExpansion ? mt('yes') : mt('no')}</dd></div>
-          <div><dt>${mt('servicesLabel')}</dt><dd>${escapeHtml(area.serviceType || '—')}</dd></div>
-        </dl>
-        ${area.description ? `<p class="map-info-desc">${escapeHtml(area.description)}</p>` : ''}
-        <p class="map-info-demo-note">${mt('demoNote')}</p>
-        <button type="button" class="button button-primary button-block" data-request-for="${area.id}" data-city="${escapeHtml(area.city)}" data-district="${escapeHtml(area.district || '')}">${mt('requestForArea')} ←</button>
-      </div>`;
-  }
-  function escapeHtml(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
-
-  panel.addEventListener('click', event => {
-    const btn = event.target.closest('[data-request-for]');
-    if (!btn) return;
-    const idField = document.getElementById('field_coverage_area_id');
-    const cityField = document.getElementById('field_city');
-    const districtField = document.getElementById('field_district');
-    if (idField) idField.value = btn.dataset.requestFor;
-    if (cityField) cityField.value = btn.dataset.city || '';
-    if (districtField) districtField.value = btn.dataset.district || '';
-    document.getElementById('consultation-form')?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
-  });
-
-  function renderMarkers(areas) {
-    markers.clearLayers();
-    areas.forEach(area => {
-      if (!Number.isFinite(area.lat) || !Number.isFinite(area.lng)) return;
-      const marker = L.circleMarker([area.lat, area.lng], {
-        radius: 10, color: '#0b2e26', weight: 2, fillColor: statusColor(area), fillOpacity: 0.9
+    const fallbackCfg = tiles && tiles.fallback;
+    const primary = addTiles(tiles && tiles.url ? tiles : {
+      provider: 'carto', url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', subdomains: 'abcd', maxZoom: 19,
+      attribution: '&copy; OpenStreetMap &copy; CARTO'
+    });
+    // If the Iranian tile server is unreachable (network/DNS errors, not "unauthorized" — the server already
+    // checked the key's expiry), switch to the fallback provider instead of leaving a blank map.
+    if (fallbackCfg) {
+      let loaded = 0, failed = 0;
+      primary.on('tileload', () => { loaded += 1; });
+      primary.on('tileerror', () => {
+        failed += 1;
+        if (failed >= 4 && loaded === 0) { primary.off(); addTiles(fallbackCfg); }
       });
-      marker.bindTooltip(area.projectName, { direction: 'top' });
-      marker.on('click', () => renderPanel(area));
-      marker.addTo(markers);
+    }
+
+    const enableWheel = () => { map.scrollWheelZoom.enable(); $('mapHint')?.classList.add('is-gone'); };
+    mapEl.addEventListener('click', enableWheel, { once: true });
+    mapEl.addEventListener('focus', enableWheel, { once: true });
+
+    areas.forEach(a => {
+      if (!Number.isFinite(a.lat) || !Number.isFinite(a.lng)) return;
+      const icon = L.divIcon({
+        className: 'cm-marker',
+        html: `<span class="cm-pin cm-tone--${tone(a)}"><b>${nf(a.projectCount)}</b></span>`,
+        iconSize: [36, 44], iconAnchor: [18, 42], tooltipAnchor: [0, -40]
+      });
+      const m = L.marker([a.lat, a.lng], { icon, title: `${a.projectName} — ${a.city}`, alt: a.projectName, riseOnHover: true, keyboard: true });
+      m.bindTooltip(`<b>${esc(a.projectName)}</b><br>${esc(ui.statusLabels?.[a.projectStatus] || a.projectStatus)}`, { direction: 'top', opacity: 1, className: 'cm-tooltip' });
+      m.on('click', () => select(a.id, { pan: false, focusPanel: true }));
+      markers.set(String(a.id), m);
+      m.addTo(map);
     });
+
+    if ('ResizeObserver' in window) new ResizeObserver(() => map.invalidateSize()).observe(mapEl);
+  } else {
+    mapEl.classList.add('is-unavailable');
   }
 
-  function updateCounts(areas) {
-    const s = summarize(areas);
-    const set = (id, v) => { const el = document.getElementById(id); if (el) animateCount(el, v); };
-    set('statTotalProjects', s.totalProjects);
-    set('statCompleted', s.completedProjects);
-    set('statSurveyed', s.surveyedAreas);
-    set('statPlanned', s.plannedAreas);
-    const pc = document.getElementById('resultProjectCount'); if (pc) pc.textContent = s.totalProjects;
-    const ac = document.getElementById('resultAreaCount'); if (ac) ac.textContent = s.areasCount;
-  }
-  // Exposed so public/js/motion.js's generic counter can be reused here without duplicating the easing code.
-  function animateCount(el, target) {
-    if (window.__novingityAnimateCount) return window.__novingityAnimateCount(el, target);
-    el.textContent = target;
+  function fitTo(items) {
+    if (!map) return;
+    const pts = items.filter(a => Number.isFinite(a.lat) && Number.isFinite(a.lng)).map(a => [a.lat, a.lng]);
+    if (!pts.length) return;
+    if (pts.length === 1) map.setView(pts[0], 10, { animate: !reduceMotion });
+    else map.fitBounds(pts, { padding: [48, 48], maxZoom: 10, animate: !reduceMotion });
   }
 
-  async function applyFilters() {
-    const filters = {
-      city: document.getElementById('filterCity')?.value || '',
-      status: document.getElementById('filterStatus')?.value || '',
-      gasService: document.getElementById('filterGas')?.value || '',
-      riser: document.getElementById('filterRiser')?.value || '',
-      search: document.getElementById('filterSearch')?.value.trim() || ''
-    };
-    const areas = await fetchCoverageAreas(filters);
-    renderMarkers(areas);
-    updateCounts(areas);
+  /* ---------- rendering ---------- */
+  function animateNumber(el, value) {
+    if (!el) return;
+    if (window.__novingityAnimateCount && !reduceMotion) window.__novingityAnimateCount(el, value);
+    else el.textContent = nf(value);
   }
 
-  ['filterCity', 'filterStatus', 'filterGas', 'filterRiser'].forEach(id => document.getElementById(id)?.addEventListener('change', applyFilters));
-  let searchDebounce;
-  document.getElementById('filterSearch')?.addEventListener('input', () => { clearTimeout(searchDebounce); searchDebounce = setTimeout(applyFilters, 250); });
-  document.getElementById('resetFilters')?.addEventListener('click', () => {
-    ['filterCity', 'filterStatus', 'filterGas', 'filterRiser'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
-    const s = document.getElementById('filterSearch'); if (s) s.value = '';
-    applyFilters();
+  function apply({ refit = true } = {}) {
+    const visible = areas.filter(a => matches(a, state));
+    const visibleIds = new Set(visible.map(a => String(a.id)));
+
+    list?.querySelectorAll('.cm-item').forEach(li => { li.hidden = !visibleIds.has(li.dataset.areaId); });
+    markers.forEach((m, id) => {
+      const el = m.getElement();
+      if (visibleIds.has(id)) { if (!map.hasLayer(m)) m.addTo(map); } else if (map.hasLayer(m)) map.removeLayer(m);
+      if (el) el.classList.toggle('is-dim', !visibleIds.has(id));
+    });
+
+    // chip counts: each status chip shows how many areas it would leave given the other filters
+    const base = areas.filter(a => matches(a, state, true));
+    document.querySelectorAll('[data-chip-count]').forEach(b => {
+      const s = b.dataset.chipCount;
+      b.textContent = nf(s ? base.filter(a => a.projectStatus === s).length : base.length);
+    });
+    document.querySelectorAll('#statusChips .cm-chip').forEach(c => c.setAttribute('aria-pressed', String(c.dataset.status === state.status)));
+
+    const totalProjects = visible.reduce((s, a) => s + (Number(a.projectCount) || 0), 0);
+    animateNumber($('statTotalProjects'), totalProjects);
+    animateNumber($('statAreas'), visible.length);
+    animateNumber($('statCompleted'), visible.filter(a => a.projectStatus === 'completed').reduce((s, a) => s + (Number(a.projectCount) || 0), 0));
+    animateNumber($('statPlanned'), visible.filter(a => a.projectStatus === 'planned' || a.gasServiceStatus === 'planned').length);
+    $('resultProjectCount') && ($('resultProjectCount').textContent = nf(totalProjects));
+    $('resultAreaCount') && ($('resultAreaCount').textContent = nf(visible.length));
+
+    const extra = ['city', 'gas', 'riser'].filter(k => state[k]).length;
+    const badge = $('moreFiltersBadge');
+    if (badge) { badge.hidden = !extra; badge.textContent = nf(extra); }
+    const reset = $('resetFilters');
+    if (reset) reset.hidden = activeFilterCount() === 0;
+    const empty = $('areaListEmpty');
+    if (empty) empty.hidden = visible.length > 0;
+
+    if (selectedId && !visibleIds.has(selectedId)) closePanel();
+    if (refit && visible.length) fitTo(visible);
+  }
+
+  let selectedId = null;
+  function renderPanel(a) {
+    const row = (label, value) => `<div><dt>${esc(label)}</dt><dd>${value}</dd></div>`;
+    const yesNo = v => esc(v ? D.yes : D.no);
+    const svc = v => esc(ui.serviceLabels?.[v] || v || '—');
+    const updated = a.lastUpdated ? new Date(a.lastUpdated) : null;
+    panel.innerHTML = `
+      <div class="cm-detail-head">
+        <span class="cm-badge cm-badge--${esc(a.projectStatus)}">${esc(ui.statusLabels?.[a.projectStatus] || a.projectStatus)}</span>
+        <button type="button" class="cm-detail-close" data-close-panel aria-label="${esc(ui.closeDetails)}">×</button>
+      </div>
+      <h3 id="mapInfoTitle">${esc(a.projectName)}</h3>
+      <p class="cm-detail-loc">${esc(a.city)}${a.district ? ' · ' + esc(a.district) : ''}</p>
+      <dl class="cm-detail-list">
+        ${row(D.projectCount, `<b class="cm-detail-num">${nf(a.projectCount)}</b>`)}
+        ${row(D.gasStatus, `<i class="cm-tone-dot cm-tone--${tone(a)}" aria-hidden="true"></i>${svc(a.gasServiceStatus)}`)}
+        ${row(D.riserInstall, svc(a.riserInstallationStatus))}
+        ${row(D.riserLocation, yesNo(a.riserLocations))}
+        ${row(D.plannedExpansion, yesNo(a.plannedExpansion))}
+        ${a.serviceType ? row(D.services, esc(a.serviceType)) : ''}
+        ${a.approximateLocation ? row(D.approximate, esc(a.approximateLocation)) : ''}
+        ${updated && !Number.isNaN(updated.getTime()) ? row(D.lastUpdated, esc(updated.toLocaleDateString(locale === 'en' ? 'en-US' : 'fa-IR'))) : ''}
+      </dl>
+      ${a.description ? `<p class="cm-detail-desc">${esc(a.description)}</p>` : ''}
+      ${a.isDemo !== false ? `<p class="cm-detail-demo"><span aria-hidden="true">⚠</span> ${esc(D.demoNote)}</p>` : ''}
+      <div class="cm-detail-actions">
+        <button type="button" class="button button-primary button-block" data-request-for="${esc(a.id)}">${esc(D.request)}</button>
+        <button type="button" class="cm-link-button" data-copy-link="${esc(a.id)}">${esc(D.copyLink)}</button>
+      </div>`;
+    panel.setAttribute('aria-labelledby', 'mapInfoTitle');
+  }
+
+  function select(id, { pan = true, focusPanel = false, updateHash = true } = {}) {
+    const a = byId.get(String(id));
+    if (!a || !panel) return;
+    selectedId = String(a.id);
+    renderPanel(a);
+    panel.hidden = false;
+    list?.querySelectorAll('.cm-item').forEach(li => li.classList.toggle('is-active', li.dataset.areaId === selectedId));
+    list?.querySelectorAll('.cm-item-link').forEach(l => l.removeAttribute('aria-current'));
+    list?.querySelector(`[data-area-id="${selectedId}"] .cm-item-link`)?.setAttribute('aria-current', 'true');
+    markers.forEach((m, mid) => m.getElement()?.classList.toggle('is-active', mid === selectedId));
+    markers.get(selectedId)?.setZIndexOffset(1000);
+    stage?.classList.add('has-detail');
+    if (pan && map && Number.isFinite(a.lat)) {
+      const zoom = Math.max(map.getZoom(), 9);
+      // On wide screens the detail card floats over the right side of the map: centre the pin in the
+      // part of the map that stays visible instead of hiding it under the card.
+      let target = L.latLng(a.lat, a.lng);
+      const floating = getComputedStyle(panel).position === 'absolute';
+      if (floating) target = map.unproject(map.project(target, zoom).add([(panel.offsetWidth + 12) / 2, 0]), zoom);
+      if (reduceMotion) map.setView(target, zoom, { animate: false });
+      else map.flyTo(target, zoom, { duration: 0.6 });
+    }
+    if (updateHash && history.replaceState) history.replaceState(null, '', `#area-${selectedId}`);
+    if (focusPanel) panel.focus({ preventScroll: true });
+  }
+
+  function closePanel() {
+    if (!panel || panel.hidden) return;
+    const was = selectedId;
+    selectedId = null;
+    panel.hidden = true;
+    panel.innerHTML = '';
+    stage?.classList.remove('has-detail');
+    list?.querySelectorAll('.cm-item').forEach(li => li.classList.remove('is-active'));
+    list?.querySelectorAll('.cm-item-link').forEach(l => l.removeAttribute('aria-current'));
+    markers.forEach(m => { m.getElement()?.classList.remove('is-active'); m.setZIndexOffset(0); });
+    if (history.replaceState && location.hash.startsWith('#area-')) history.replaceState(null, '', location.pathname + location.search);
+    return was;
+  }
+
+  /* ---------- consultation form link ---------- */
+  const chip = $('selectedAreaChip');
+  function setFormArea(a) {
+    const idField = $('field_coverage_area_id');
+    if (idField) idField.value = a ? String(a.id) : '';
+    if (a) {
+      if ($('field_city')) $('field_city').value = a.city || '';
+      if ($('field_district')) $('field_district').value = a.district || '';
+    }
+    if (!chip) return;
+    chip.classList.toggle('is-set', !!a);
+    chip.innerHTML = a
+      ? `<span class="cm-area-chip-label">${esc(ui.selectedArea)}</span><strong id="selectedAreaName">${esc(a.projectName)} — ${esc(a.city)}</strong><button type="button" class="cm-link-button" id="clearSelectedArea">${esc(ui.clearArea)}</button>`
+      : `<span class="cm-area-chip-empty">${esc(chip.dataset.emptyText || '')}</span>`;
+  }
+  chip?.addEventListener('click', e => {
+    if (e.target.closest('#clearSelectedArea')) { setFormArea(null); $('field_city')?.focus(); }
+  });
+  const preset = byId.get(String($('field_coverage_area_id')?.value || ''));
+  if (preset && chip) chip.classList.add('is-set');
+
+  panel?.addEventListener('click', async e => {
+    if (e.target.closest('[data-close-panel]')) {
+      const was = closePanel();
+      list?.querySelector(`[data-area-id="${was}"] .cm-item-link`)?.focus({ preventScroll: true });
+      return;
+    }
+    const copy = e.target.closest('[data-copy-link]');
+    if (copy) {
+      const url = `${location.origin}${location.pathname}#area-${copy.dataset.copyLink}`;
+      try { await navigator.clipboard.writeText(url); copy.textContent = D.linkCopied; setTimeout(() => { copy.textContent = D.copyLink; }, 2000); } catch { /* clipboard blocked: the URL is already in the address bar */ }
+      return;
+    }
+    const req = e.target.closest('[data-request-for]');
+    if (!req) return;
+    const a = byId.get(req.dataset.requestFor);
+    if (!a) return;
+    setFormArea(a);
+    const form = $('consultation-form');
+    form?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+    setTimeout(() => $('field_full_name')?.focus({ preventScroll: true }), reduceMotion ? 0 : 450);
   });
 
-  renderMarkers(allAreas);
-  updateCounts(allAreas);
+  /* ---------- controls ---------- */
+  list?.addEventListener('click', e => {
+    const link = e.target.closest('[data-select-area]');
+    if (!link) return;
+    e.preventDefault();
+    select(link.dataset.selectArea, { pan: true });
+    // on narrow screens the map sits above the list — bring it into view
+    if (window.matchMedia('(max-width: 900px)').matches) mapEl.closest('.cm-stage')?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+    panel?.focus({ preventScroll: true });
+  });
+
+  $('statusChips')?.addEventListener('click', e => {
+    const c = e.target.closest('.cm-chip');
+    if (!c) return;
+    state.status = c.dataset.status || '';
+    apply();
+  });
+  const bindSelect = (id, key) => $(id)?.addEventListener('change', e => { state[key] = e.target.value; apply(); });
+  bindSelect('filterCity', 'city'); bindSelect('filterGas', 'gas'); bindSelect('filterRiser', 'riser');
+  let t;
+  $('filterSearch')?.addEventListener('input', e => { clearTimeout(t); t = setTimeout(() => { state.search = e.target.value.trim(); apply(); }, 180); });
+  $('mapFilters')?.addEventListener('submit', e => e.preventDefault());
+
+  function resetAll() {
+    Object.keys(state).forEach(k => { state[k] = ''; });
+    ['filterCity', 'filterGas', 'filterRiser', 'filterSearch'].forEach(id => { const el = $(id); if (el) el.value = ''; });
+    apply();
+  }
+  $('resetFilters')?.addEventListener('click', resetAll);
+  document.querySelector('[data-reset-filters]')?.addEventListener('click', resetAll);
+  $('fitAllAreas')?.addEventListener('click', () => fitTo(areas.filter(a => matches(a, state))));
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && selectedId && panel?.contains(document.activeElement)) {
+      const was = closePanel();
+      list?.querySelector(`[data-area-id="${was}"] .cm-item-link`)?.focus({ preventScroll: true });
+    }
+  });
+
+  /* ---------- start ---------- */
+  const fromHash = () => { const m = /^#area-(\d+)$/.exec(location.hash); return m && byId.has(m[1]) ? m[1] : null; };
+  apply({ refit: !fromHash() });
+  const initial = fromHash();
+  if (initial) select(initial, { pan: true, updateHash: false });
+  window.addEventListener('hashchange', () => { const id = fromHash(); if (id && id !== selectedId) select(id, { pan: true, updateHash: false }); });
 })();

@@ -16,7 +16,7 @@ const skipReason = !TEST_DB ? 'TEST_DATABASE_URL is not set (integration tests n
 function configureEnv(extra = {}) {
   Object.assign(process.env, {
     NODE_ENV: 'test', APP_SECRET: 'integration-test-secret-0123456789abcdef', SHOW_DEV_OTP: 'true',
-    APP_URL: 'http://127.0.0.1', KAVENEGAR_API_KEY: '', ZARINPAL_MERCHANT_ID: '', TRUST_PROXY: 'false', LOG_LEVEL: 'silent', FEATURE_COVERAGE_MAP: 'true'
+    APP_URL: 'http://127.0.0.1', KAVENEGAR_API_KEY: '', ZARINPAL_MERCHANT_ID: '', TRUST_PROXY: 'false', LOG_LEVEL: 'silent', FEATURE_COVERAGE_MAP: 'true', MAPIR_API_KEY: ''
   }, extra);
 }
 

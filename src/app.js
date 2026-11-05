@@ -22,7 +22,8 @@ const { digitsEnglish, normalizeIranMobile, normalizeText, isValidEmail } = requ
 const { logger: defaultLogger } = require('./lib/logger');
 const { listMigrations } = require('./lib/migrations');
 const { i18nMiddleware, resolveLocale, DEFAULT_LOCALE, LOCALE_COOKIE } = require('./lib/i18n');
-const { filterCoverageAreas, summarizeCoverageAreas } = require('./lib/coverage-filter');
+const { filterCoverageAreas, summarizeCoverageAreas, statusColor: coverageTone } = require('./lib/coverage-filter');
+const { mapTileConfig, mapirKeyStatus } = require('./lib/map-tiles');
 
 // Versions shipped with this build; read once at start-up.
 const EXPECTED_MIGRATIONS = listMigrations().map(m => m.version);
@@ -54,7 +55,7 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
   // showing old styles/scripts to returning visitors.
   const ASSET_VERSION = (() => {
     const h = crypto.createHash('sha1');
-    for (const f of ['css/styles.css', 'css/elevate.css', 'js/main.js', 'js/motion.js', 'js/tools.js', 'js/map.js']) {
+    for (const f of ['css/styles.css', 'css/elevate.css', 'js/main.js', 'js/motion.js', 'js/tools.js', 'js/map.js', 'css/coverage-map.css']) {
       try { h.update(fs.readFileSync(path.join(ROOT, 'public', f))); } catch { /* optional file */ }
     }
     return h.digest('hex').slice(0, 10);
@@ -570,21 +571,29 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
     const r = await pool.query('SELECT * FROM coverage_areas ORDER BY city, id');
     return r.rows.map(mapCoverageRow);
   }
-  app.get('/coverage-map', asyncRoute(async (req, res) => {
-    if (!COVERAGE_MAP_ENABLED) return renderError(res, 404, res.locals.t('errorPage.notFoundTitle'), res.locals.t('errorPage.notFoundMessage'));
+  // While the feature is switched off, content admins can still open the page (marked as a preview) to
+  // check it before it goes public. Everyone else gets a 404.
+  const coverageMapVisible = req => COVERAGE_MAP_ENABLED || (!!req.admin && hasPermission(req.admin.role, 'content'));
+  async function renderCoverageMap(req, res, { status = 200, formValues = {}, formErrors = {} } = {}) {
     const areas = await readCoverageAreas();
-    res.render('coverage-map', {
+    return res.status(status).render('coverage-map', {
       title: res.locals.t('coverageMap.pageTitle'),
       metaDescription: res.locals.t('coverageMap.metaDescription'),
       areas, cities: [...new Set(areas.map(a => a.city))].sort(),
       requestTypeLabels: localizedLabels(res.locals.t, REQUEST_TYPE_LABELS, 'consultation.requestType'), projectStatusFormLabels: localizedLabels(res.locals.t, PROJECT_STATUS_FORM_LABELS, 'consultation.projectStatus'), contactMethodLabels: localizedLabels(res.locals.t, CONTACT_METHOD_LABELS, 'consultation.contactMethod'),
-      formValues: {}, formErrors: {}
+      summary: summarizeCoverageAreas(areas), coverageTone, mapTiles: mapTileConfig(), adminPreview: !COVERAGE_MAP_ENABLED,
+      formValues, formErrors
     });
+  }
+  app.get('/coverage-map', asyncRoute(async (req, res) => {
+    if (!coverageMapVisible(req)) return renderError(res, 404, res.locals.t('errorPage.notFoundTitle'), res.locals.t('errorPage.notFoundMessage'));
+    res.set('Cache-Control', COVERAGE_MAP_ENABLED ? 'no-cache' : 'no-store, private');
+    return renderCoverageMap(req, res);
   }));
   // Same read function the page itself renders from server-side, exposed as JSON so the map's client-side
   // filters/search work over the live dataset without a full page reload.
   app.get('/api/coverage-areas', asyncRoute(async (req, res) => {
-    if (!COVERAGE_MAP_ENABLED) return res.status(404).json({ error: 'not found' });
+    if (!coverageMapVisible(req)) return res.status(404).json({ error: 'not found' });
     const areas = await readCoverageAreas();
     const filtered = filterCoverageAreas(areas, { city: req.query.city, status: req.query.status, gasService: req.query.gasService, riser: req.query.riser, search: req.query.q });
     res.json({ areas: filtered, summary: summarizeCoverageAreas(filtered) });
@@ -595,7 +604,7 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
   const CONSULTATION_PROJECT_STATUSES = Object.keys(PROJECT_STATUS_FORM_LABELS);
   const CONSULTATION_CONTACT_METHODS = Object.keys(CONTACT_METHOD_LABELS);
   app.post('/consultation-requests', coverUpload.single('attachment'), multipartCsrf, verifyUploads(imagePolicy, '/coverage-map#consultation-form'), asyncRoute(async (req, res) => {
-    if (!COVERAGE_MAP_ENABLED) return renderError(res, 404, res.locals.t('errorPage.notFoundTitle'), res.locals.t('errorPage.notFoundMessage'));
+    if (!coverageMapVisible(req)) { removeUploaded(req); return renderError(res, 404, res.locals.t('errorPage.notFoundTitle'), res.locals.t('errorPage.notFoundMessage')); }
     const fullName = normalizeText(req.body.full_name, 160);
     const mobileRaw = String(req.body.mobile || '');
     const mobile = normalizeIranMobile(mobileRaw);
@@ -618,16 +627,9 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
     if (!projectDescription) errors.project_description = res.locals.t('consultation.error.description');
     if (Object.keys(errors).length) {
       removeUploaded(req);
-      const areas = await readCoverageAreas();
       res.locals.flash = { type: 'error', message: res.locals.t('consultation.error.summary') };
-      return res.status(422).render('coverage-map', {
-        title: res.locals.t('coverageMap.pageTitle'),
-        metaDescription: res.locals.t('coverageMap.metaDescription'),
-        areas, cities: [...new Set(areas.map(a => a.city))].sort(),
-        requestTypeLabels: localizedLabels(res.locals.t, REQUEST_TYPE_LABELS, 'consultation.requestType'), projectStatusFormLabels: localizedLabels(res.locals.t, PROJECT_STATUS_FORM_LABELS, 'consultation.projectStatus'), contactMethodLabels: localizedLabels(res.locals.t, CONTACT_METHOD_LABELS, 'consultation.contactMethod'),
-        formValues: { full_name: fullName, mobile: mobileRaw, contact_method: contactMethod, province, city, district, coverage_area_id: coverageAreaId || '', project_type: projectType, project_address: projectAddress, project_description: projectDescription, request_type: requestType, project_status: projectStatus, notes, preferred_contact_time: preferredContactTime },
-        formErrors: errors
-      });
+      return renderCoverageMap(req, res, { status: 422, formErrors: errors,
+        formValues: { full_name: fullName, mobile: mobileRaw, contact_method: contactMethod, province, city, district, coverage_area_id: coverageAreaId || '', project_type: projectType, project_address: projectAddress, project_description: projectDescription, request_type: requestType, project_status: projectStatus, notes, preferred_contact_time: preferredContactTime } });
     }
     const attachmentPath = acceptableCoverValue(req.file, '');
     const saved = await pool.query(
@@ -1172,7 +1174,7 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
       q(`SELECT (SELECT COUNT(*)::int FROM products WHERE status='draft') AS products, (SELECT COUNT(*)::int FROM articles WHERE status='draft') AS articles`)
     ]);
     const openTickets = hasPermission(req.admin.role, 'support') ? (await pool.query("SELECT COUNT(*)::int AS n FROM tickets WHERE status IN ('open','pending')")).rows[0].n : 0;
-    res.render('admin/dashboard', { title: res.locals.t('adminDash.title'), counts: counts[0], sales: sales[0], orders: recentOrders, audit: recentAudit, drafts: drafts[0], openTickets });
+    res.render('admin/dashboard', { title: res.locals.t('adminDash.title'), counts: counts[0], sales: sales[0], orders: recentOrders, audit: recentAudit, drafts: drafts[0], openTickets, mapKey: mapirKeyStatus(), coverageMapEnabled: COVERAGE_MAP_ENABLED });
   }));
 
   // ───────────── Products ─────────────

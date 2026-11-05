@@ -37,6 +37,10 @@ services:
       ZARINPAL_MERCHANT_ID: ${ZARINPAL_MERCHANT_ID:-}
       ZARINPAL_SANDBOX: ${ZARINPAL_SANDBOX:-true}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Hormozgan coverage map: page stays hidden (admins can preview) until FEATURE_COVERAGE_MAP=true;
+      # Map.ir base-map tiles are used while MAPIR_API_KEY holds an unexpired key, otherwise OSM/CARTO.
+      FEATURE_COVERAGE_MAP: ${FEATURE_COVERAGE_MAP:-false}
+      MAPIR_API_KEY: ${MAPIR_API_KEY:-}
     volumes:
       - nugas_uploads:/app/uploads
 volumes:

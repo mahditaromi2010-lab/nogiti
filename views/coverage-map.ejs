@@ -1,69 +1,176 @@
 <%- include('partials/header', {title, metaDescription}) %>
 <link rel="stylesheet" href="/public/vendor/leaflet/leaflet.css">
-<section class="page-hero map-hero"><div class="container"><div class="breadcrumb"><a href="/"><%= t('tools.breadcrumbHome') %></a><span>/</span><span><%= t('coverageMap.breadcrumbSelf') %></span></div><span class="section-kicker"><%= t('kicker.coverageMap') %></span><h1><%= t('coverageMap.titlePre') %><br><em><%= t('coverageMap.titleEm') %></em></h1><p><%= t('coverageMap.lead') %></p>
-<div class="tools-disclaimer demo-disclaimer"><span>⚠</span><p><b><%= t('coverageMap.disclaimerLabel') %></b> <%= t('coverageMap.disclaimerText') %></p></div>
-</div></section>
-<%- include('partials/flow-divider') %>
-<section class="section map-summary-section"><div class="container">
-  <div class="summary-cards reveal-stagger" id="summaryCards">
-    <div class="summary-card reveal-item"><span class="summary-card-label"><%= t('coverageMap.statTotalProjects') %></span><strong data-count="0" id="statTotalProjects">0</strong></div>
-    <div class="summary-card reveal-item"><span class="summary-card-label"><%= t('coverageMap.statCompleted') %></span><strong data-count="0" id="statCompleted">0</strong></div>
-    <div class="summary-card reveal-item"><span class="summary-card-label"><%= t('coverageMap.statSurveyed') %></span><strong data-count="0" id="statSurveyed">0</strong></div>
-    <div class="summary-card reveal-item"><span class="summary-card-label"><%= t('coverageMap.statPlanned') %></span><strong data-count="0" id="statPlanned">0</strong></div>
-  </div>
-  <p class="muted-text map-results-line"><%= t('coverageMap.resultsLinePre') %> <b id="resultProjectCount">0</b> <%= t('coverageMap.resultsLineMid') %> <b id="resultAreaCount">0</b> <%= t('coverageMap.resultsLineSuffix') %></p>
+<link rel="stylesheet" href="/public/css/coverage-map.css?v=<%= locals.assetVersion || '0' %>">
+<%
+  const nf = n => Number(n || 0).toLocaleString(locale === 'en' ? 'en-US' : 'fa-IR');
+  const statusLabels = { completed: t('coverageMap.statusCompleted'), in_progress: t('coverageMap.statusInProgress'), planned: t('coverageMap.statusPlanned'), under_review: t('coverageMap.statusUnderReview') };
+  const serviceLabels = { installed: t('coverageMap.gasInstalled'), not_installed: t('coverageMap.gasNotInstalled'), planned: t('coverageMap.gasPlanned'), unknown: t('coverageMap.gasUnknown') };
+  const statusCounts = areas.reduce((m, a) => { m[a.projectStatus] = (m[a.projectStatus] || 0) + 1; return m; }, {});
+  const selectedArea = areas.find(a => String(a.id) === String(formValues.coverage_area_id || ''));
+  const toneLabels = { green: t('coverageMap.legendGreen'), orange: t('coverageMap.legendOrange'), blue: t('coverageMap.legendBlue'), gray: t('coverageMap.legendGray') };
+%>
+<% if (adminPreview) { %><div class="cm-preview-banner" role="status"><div class="container"><span aria-hidden="true">◐</span> <%= t('coverageMap.previewBanner') %></div></div><% } %>
 
-  <div class="map-filters" id="mapFilters">
-    <div class="form-field"><label for="filterCity"><%= t('coverageMap.filterCity') %></label><select class="form-control" id="filterCity"><option value=""><%= t('coverageMap.filterCityAll') %></option><% cities.forEach(c => { %><option value="<%= c %>"><%= c %></option><% }) %></select></div>
-    <div class="form-field"><label for="filterStatus"><%= t('coverageMap.filterStatus') %></label><select class="form-control" id="filterStatus"><option value=""><%= t('coverageMap.filterAll') %></option><option value="completed"><%= t('coverageMap.statusCompleted') %></option><option value="in_progress"><%= t('coverageMap.statusInProgress') %></option><option value="planned"><%= t('coverageMap.statusPlanned') %></option><option value="under_review"><%= t('coverageMap.statusUnderReview') %></option></select></div>
-    <div class="form-field"><label for="filterGas"><%= t('coverageMap.filterGas') %></label><select class="form-control" id="filterGas"><option value=""><%= t('coverageMap.filterAll') %></option><option value="installed"><%= t('coverageMap.gasInstalled') %></option><option value="not_installed"><%= t('coverageMap.gasNotInstalled') %></option><option value="planned"><%= t('coverageMap.gasPlanned') %></option><option value="unknown"><%= t('coverageMap.gasUnknown') %></option></select></div>
-    <div class="form-field"><label for="filterRiser"><%= t('coverageMap.filterRiser') %></label><select class="form-control" id="filterRiser"><option value=""><%= t('coverageMap.filterAll') %></option><option value="installed"><%= t('coverageMap.gasInstalled') %></option><option value="not_installed"><%= t('coverageMap.gasNotInstalled') %></option><option value="planned"><%= t('coverageMap.gasPlanned') %></option><option value="unknown"><%= t('coverageMap.gasUnknown') %></option></select></div>
-    <div class="form-field"><label for="filterSearch"><%= t('coverageMap.filterSearch') %></label><input class="form-control" id="filterSearch" type="text" placeholder="<%= t('coverageMap.filterSearchPlaceholder') %>"></div>
-    <button class="button button-outline button-small" type="button" id="resetFilters"><%= t('coverageMap.resetFilters') %></button>
+<section class="page-hero map-hero cm-hero"><div class="container cm-hero-grid">
+  <div class="cm-hero-copy">
+    <div class="breadcrumb"><a href="/"><%= t('tools.breadcrumbHome') %></a><span>/</span><span><%= t('coverageMap.breadcrumbSelf') %></span></div>
+    <span class="section-kicker"><%= t('kicker.coverageMap') %></span>
+    <h1><%= t('coverageMap.titlePre') %><br><em><%= t('coverageMap.titleEm') %></em></h1>
+    <p><%= t('coverageMap.lead') %></p>
+    <div class="tools-disclaimer demo-disclaimer"><span aria-hidden="true">⚠</span><p><b><%= t('coverageMap.disclaimerLabel') %></b> <%= t('coverageMap.disclaimerText') %></p></div>
   </div>
-
-  <div class="map-legend" aria-label="<%= t('coverageMap.legendAria') %>">
-    <span class="legend-item"><i class="legend-dot legend-green"></i> <%= t('coverageMap.legendGreen') %></span>
-    <span class="legend-item"><i class="legend-dot legend-orange"></i> <%= t('coverageMap.legendOrange') %></span>
-    <span class="legend-item"><i class="legend-dot legend-blue"></i> <%= t('coverageMap.legendBlue') %></span>
-    <span class="legend-item"><i class="legend-dot legend-gray"></i> <%= t('coverageMap.legendGray') %></span>
-  </div>
-
-  <div class="map-layout">
-    <div id="coverageMap" class="coverage-map-canvas" role="application" aria-label="<%= t('coverageMap.canvasAria') %>" data-areas-api="/api/coverage-areas"></div>
-    <aside class="map-info-panel" id="mapInfoPanel" aria-live="polite">
-      <div class="map-info-empty"><span>↖</span><p><%= t('coverageMap.infoPanelEmpty') %></p></div>
-    </aside>
-  </div>
+  <dl class="cm-stats" aria-label="<%= t('coverageMap.statsAria') %>">
+    <div class="cm-stat"><dt><%= t('coverageMap.statTotalProjects') %></dt><dd id="statTotalProjects"><%= nf(summary.totalProjects) %></dd></div>
+    <div class="cm-stat"><dt><%= t('coverageMap.statAreas') %></dt><dd id="statAreas"><%= nf(summary.areasCount) %></dd></div>
+    <div class="cm-stat"><dt><%= t('coverageMap.statCompleted') %></dt><dd id="statCompleted"><%= nf(summary.completedProjects) %></dd></div>
+    <div class="cm-stat"><dt><%= t('coverageMap.statPlanned') %></dt><dd id="statPlanned"><%= nf(summary.plannedAreas) %></dd></div>
+  </dl>
 </div></section>
 
-<section class="section consultation-section" id="consultation-form"><div class="container">
-  <div class="section-heading"><div><span class="section-kicker"><%= t('consultation.sectionKicker') %></span><h2><%= t('consultation.heading') %></h2><p><%= t('consultation.sub') %></p></div></div>
-  <form class="admin-form consultation-request-form" action="/consultation-requests#consultation-form" method="post" enctype="multipart/form-data" data-unsaved-guard>
+<section class="section cm-explorer-section"><div class="container">
+  <h2 class="sr-only" id="cmExplorerTitle"><%= t('coverageMap.canvasAria') %></h2>
+  <div class="cm-explorer" id="coverageExplorer">
+    <div class="cm-side">
+      <form class="cm-toolbar" id="mapFilters" role="search">
+        <label class="cm-search">
+          <span class="sr-only"><%= t('coverageMap.filterSearch') %></span>
+          <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="m20 20-3.6-3.6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          <input id="filterSearch" type="search" autocomplete="off" placeholder="<%= t('coverageMap.filterSearch') %> — <%= t('coverageMap.filterSearchPlaceholder') %>">
+        </label>
+        <div class="cm-chips" role="group" aria-label="<%= t('coverageMap.statusChipsLabel') %>" id="statusChips">
+          <button type="button" class="cm-chip" data-status="" aria-pressed="true"><%= t('coverageMap.filterAll') %> <b data-chip-count=""><%= nf(areas.length) %></b></button>
+          <% ['completed','in_progress','under_review','planned'].forEach(s => { %><button type="button" class="cm-chip" data-status="<%= s %>" aria-pressed="false"><i class="cm-dot cm-dot--<%= s %>" aria-hidden="true"></i><%= statusLabels[s] %> <b data-chip-count="<%= s %>"><%= nf(statusCounts[s] || 0) %></b></button><% }) %>
+        </div>
+        <details class="cm-more" id="moreFilters">
+          <summary><%= t('coverageMap.moreFilters') %> <span class="cm-more-badge" id="moreFiltersBadge" hidden></span></summary>
+          <div class="cm-more-grid">
+            <div class="form-field"><label for="filterCity"><%= t('coverageMap.filterCity') %></label><select class="form-control" id="filterCity"><option value=""><%= t('coverageMap.filterCityAll') %></option><% cities.forEach(c => { %><option value="<%= c %>"><%= c %></option><% }) %></select></div>
+            <div class="form-field"><label for="filterGas"><%= t('coverageMap.filterGas') %></label><select class="form-control" id="filterGas"><option value=""><%= t('coverageMap.filterAll') %></option><% Object.keys(serviceLabels).forEach(v => { %><option value="<%= v %>"><%= serviceLabels[v] %></option><% }) %></select></div>
+            <div class="form-field"><label for="filterRiser"><%= t('coverageMap.filterRiser') %></label><select class="form-control" id="filterRiser"><option value=""><%= t('coverageMap.filterAll') %></option><% Object.keys(serviceLabels).forEach(v => { %><option value="<%= v %>"><%= serviceLabels[v] %></option><% }) %></select></div>
+          </div>
+        </details>
+        <div class="cm-results-meta">
+          <p id="mapResultsLine" aria-live="polite"><%= t('coverageMap.resultsLinePre') %> <b id="resultProjectCount"><%= nf(summary.totalProjects) %></b> <%= t('coverageMap.resultsLineMid') %> <b id="resultAreaCount"><%= nf(summary.areasCount) %></b> <%= t('coverageMap.resultsLineSuffix') %></p>
+          <button class="cm-link-button" type="button" id="resetFilters" hidden><%= t('coverageMap.resetFilters') %></button>
+        </div>
+      </form>
+
+      <h3 class="cm-list-title" id="areaListTitle"><%= t('coverageMap.resultsHeading') %></h3>
+      <ol class="cm-list" id="areaList" aria-labelledby="areaListTitle">
+        <% areas.forEach(a => { const tone = coverageTone(a); %>
+        <li class="cm-item" data-area-id="<%= a.id %>">
+          <a class="cm-item-link" href="#area-<%= a.id %>" data-select-area="<%= a.id %>">
+            <span class="cm-item-pin cm-tone--<%= tone %>" aria-hidden="true"><%= nf(a.projectCount) %></span>
+            <span class="cm-item-body">
+              <strong><%= a.projectName %></strong>
+              <small><%= a.city %><% if (a.district) { %> · <%= a.district %><% } %></small>
+            </span>
+            <span class="cm-badge cm-badge--<%= a.projectStatus %>"><%= statusLabels[a.projectStatus] || a.projectStatus %></span>
+          </a>
+        </li>
+        <% }) %>
+      </ol>
+      <div class="cm-empty" id="areaListEmpty" hidden>
+        <p><%= t('coverageMap.emptyResults') %></p>
+        <button class="button button-outline button-small" type="button" data-reset-filters><%= t('coverageMap.emptyResultsAction') %></button>
+      </div>
+    </div>
+
+    <div class="cm-stage">
+      <a class="cm-skip" href="#areaList"><%= t('coverageMap.skipToList') %></a>
+      <div id="coverageMap" class="coverage-map-canvas cm-canvas" role="region" aria-label="<%= t('coverageMap.canvasAria') %>" data-areas-api="/api/coverage-areas" data-tile-provider="<%= mapTiles.provider %>">
+        <p class="cm-canvas-loading"><%= t('coverageMap.mapLoading') %></p>
+      </div>
+      <noscript><p class="cm-noscript"><%= t('coverageMap.noScript') %></p></noscript>
+      <div class="cm-map-tools">
+        <button type="button" class="cm-tool" id="fitAllAreas" title="<%= t('coverageMap.fitAll') %>"><svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span class="sr-only"><%= t('coverageMap.fitAll') %></span></button>
+      </div>
+      <ul class="cm-legend" aria-label="<%= t('coverageMap.legendAria') %>">
+        <li class="cm-legend-title"><%= t('coverageMap.filterGas') %>:</li>
+        <% ['green','orange','blue','gray'].forEach(tone => { %><li><i class="cm-tone-dot cm-tone--<%= tone %>" aria-hidden="true"></i><%= toneLabels[tone] %></li><% }) %>
+      </ul>
+      <p class="cm-hint" id="mapHint"><%= t('coverageMap.mapHint') %></p>
+      <div class="cm-detail" id="mapInfoPanel" aria-live="polite" tabindex="-1" hidden></div>
+    </div>
+  </div>
+</div></section>
+
+<section class="section consultation-section cm-consult" id="consultation-form"><div class="container cm-consult-grid">
+  <div class="cm-consult-intro">
+    <span class="section-kicker"><%= t('consultation.sectionKicker') %></span>
+    <h2><%= t('consultation.heading') %></h2>
+    <p><%= t('consultation.sub') %></p>
+    <h3 class="cm-steps-title"><%= t('consultation.stepsTitle') %></h3>
+    <ol class="cm-steps">
+      <li><%= t('consultation.step1') %></li>
+      <li><%= t('consultation.step2') %></li>
+      <li><%= t('consultation.step3') %></li>
+    </ol>
+  </div>
+
+  <form class="admin-form consultation-request-form cm-form" action="/consultation-requests#consultation-form" method="post" enctype="multipart/form-data" data-unsaved-guard>
     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
     <input type="hidden" name="coverage_area_id" id="field_coverage_area_id" value="<%= formValues.coverage_area_id || '' %>">
-    <div class="form-grid">
-      <div class="form-field"><label for="field_full_name"><%= t('consultation.fullName') %> *</label><input class="form-control" id="field_full_name" name="full_name" maxlength="160" value="<%= formValues.full_name || '' %>" required><% if (formErrors.full_name) { %><small class="field-error"><%= formErrors.full_name %></small><% } %></div>
-      <div class="form-field"><label for="field_mobile"><%= t('consultation.mobile') %> *</label><input class="form-control" dir="ltr" id="field_mobile" name="mobile" placeholder="09121234567" value="<%= formValues.mobile || '' %>" required><% if (formErrors.mobile) { %><small class="field-error"><%= formErrors.mobile %></small><% } %></div>
-      <div class="form-field"><label for="field_contact_method"><%= t('consultation.contactMethodLabel') %></label><select class="form-control" id="field_contact_method" name="contact_method"><% ['phone','sms','whatsapp','email'].forEach(v => { %><option value="<%= v %>" <%= formValues.contact_method===v?'selected':'' %>><%= contactMethodLabels[v] %></option><% }) %></select></div>
-      <div class="form-field"><label for="field_province"><%= t('consultation.province') %></label><input class="form-control" id="field_province" name="province" value="<%= formValues.province || t('coverageMap.hormozganProvince') %>"></div>
-      <div class="form-field"><label for="field_city"><%= t('consultation.city') %> *</label><input class="form-control" id="field_city" name="city" value="<%= formValues.city || '' %>" required><% if (formErrors.city) { %><small class="field-error"><%= formErrors.city %></small><% } %></div>
-      <div class="form-field"><label for="field_district"><%= t('consultation.district') %></label><input class="form-control" id="field_district" name="district" value="<%= formValues.district || '' %>"></div>
-      <div class="form-field"><label for="field_project_type"><%= t('consultation.projectType') %></label><input class="form-control" id="field_project_type" name="project_type" value="<%= formValues.project_type || '' %>" placeholder="<%= t('consultation.projectTypePlaceholder') %>"></div>
-      <div class="form-field"><label for="field_request_type"><%= t('consultation.requestTypeLabel') %></label><select class="form-control" id="field_request_type" name="request_type"><% Object.keys(requestTypeLabels).forEach(v => { %><option value="<%= v %>" <%= formValues.request_type===v?'selected':'' %>><%= requestTypeLabels[v] %></option><% }) %></select></div>
-      <div class="form-field"><label for="field_project_status"><%= t('consultation.projectStatusLabel') %></label><select class="form-control" id="field_project_status" name="project_status"><% Object.keys(projectStatusFormLabels).forEach(v => { %><option value="<%= v %>" <%= formValues.project_status===v?'selected':'' %>><%= projectStatusFormLabels[v] %></option><% }) %></select></div>
-      <div class="form-field form-span-2"><label for="field_project_address"><%= t('consultation.projectAddress') %></label><input class="form-control" id="field_project_address" name="project_address" maxlength="400" value="<%= formValues.project_address || '' %>"></div>
-      <div class="form-field form-span-2"><label for="field_project_description"><%= t('consultation.projectDescription') %> *</label><textarea class="form-control" id="field_project_description" name="project_description" rows="4" maxlength="3000" required><%= formValues.project_description || '' %></textarea><% if (formErrors.project_description) { %><small class="field-error"><%= formErrors.project_description %></small><% } %></div>
-      <div class="form-field form-span-2"><label for="field_notes"><%= t('consultation.notes') %></label><textarea class="form-control" id="field_notes" name="notes" rows="3" maxlength="2000"><%= formValues.notes || '' %></textarea></div>
-      <div class="form-field"><label for="field_preferred_contact_time"><%= t('consultation.preferredContactTime') %></label><input class="form-control" id="field_preferred_contact_time" name="preferred_contact_time" maxlength="120" value="<%= formValues.preferred_contact_time || '' %>" placeholder="<%= t('consultation.preferredContactTimePlaceholder') %>"></div>
-      <div class="form-field form-span-2"><label for="field_attachment"><%= t('consultation.attachment') %></label><input class="form-control file-control" id="field_attachment" type="file" name="attachment" accept="image/jpeg,image/png,image/webp,image/gif"><small><%= t('consultation.attachmentHint') %></small><% if (formErrors.attachment) { %><small class="field-error"><%= formErrors.attachment %></small><% } %></div>
+
+    <div class="cm-area-chip" id="selectedAreaChip" data-empty-text="<%= t('consultation.noAreaSelected') %>" aria-live="polite">
+      <% if (selectedArea) { %>
+        <span class="cm-area-chip-label"><%= t('consultation.selectedArea') %></span>
+        <strong id="selectedAreaName"><%= selectedArea.projectName %> — <%= selectedArea.city %></strong>
+        <button type="button" class="cm-link-button" id="clearSelectedArea"><%= t('consultation.clearArea') %></button>
+      <% } else { %>
+        <span class="cm-area-chip-empty"><%= t('consultation.noAreaSelected') %></span>
+      <% } %>
     </div>
+    <p class="cm-required-hint"><%= t('consultation.requiredHint') %></p>
+
+    <fieldset class="cm-fieldset">
+      <legend><span><%= nf(1) %></span><%= t('consultation.groupContact') %></legend>
+      <div class="form-grid">
+        <div class="form-field"><label for="field_full_name"><%= t('consultation.fullName') %> *</label><input class="form-control" id="field_full_name" name="full_name" maxlength="160" autocomplete="name" value="<%= formValues.full_name || '' %>" required <% if (formErrors.full_name) { %>aria-invalid="true" aria-describedby="err_full_name"<% } %>><% if (formErrors.full_name) { %><small class="field-error" id="err_full_name"><%= formErrors.full_name %></small><% } %></div>
+        <div class="form-field"><label for="field_mobile"><%= t('consultation.mobile') %> *</label><input class="form-control" dir="ltr" id="field_mobile" name="mobile" inputmode="tel" autocomplete="tel" placeholder="09121234567" value="<%= formValues.mobile || '' %>" required <% if (formErrors.mobile) { %>aria-invalid="true" aria-describedby="err_mobile"<% } %>><% if (formErrors.mobile) { %><small class="field-error" id="err_mobile"><%= formErrors.mobile %></small><% } %></div>
+        <div class="form-field"><label for="field_contact_method"><%= t('consultation.contactMethodLabel') %></label><select class="form-control" id="field_contact_method" name="contact_method"><% ['phone','sms','whatsapp','email'].forEach(v => { %><option value="<%= v %>" <%= formValues.contact_method===v?'selected':'' %>><%= contactMethodLabels[v] %></option><% }) %></select></div>
+        <div class="form-field"><label for="field_preferred_contact_time"><%= t('consultation.preferredContactTime') %></label><input class="form-control" id="field_preferred_contact_time" name="preferred_contact_time" maxlength="120" value="<%= formValues.preferred_contact_time || '' %>" placeholder="<%= t('consultation.preferredContactTimePlaceholder') %>"></div>
+      </div>
+    </fieldset>
+
+    <fieldset class="cm-fieldset">
+      <legend><span><%= nf(2) %></span><%= t('consultation.groupLocation') %></legend>
+      <div class="form-grid">
+        <div class="form-field"><label for="field_province"><%= t('consultation.province') %></label><input class="form-control" id="field_province" name="province" value="<%= formValues.province || t('coverageMap.hormozganProvince') %>"></div>
+        <div class="form-field"><label for="field_city"><%= t('consultation.city') %> *</label><input class="form-control" id="field_city" name="city" list="cityOptions" autocomplete="address-level2" value="<%= formValues.city || '' %>" required <% if (formErrors.city) { %>aria-invalid="true" aria-describedby="err_city"<% } %>><datalist id="cityOptions"><% cities.forEach(c => { %><option value="<%= c %>"><% }) %></datalist><% if (formErrors.city) { %><small class="field-error" id="err_city"><%= formErrors.city %></small><% } %></div>
+        <div class="form-field"><label for="field_district"><%= t('consultation.district') %></label><input class="form-control" id="field_district" name="district" value="<%= formValues.district || '' %>"></div>
+        <div class="form-field form-span-2"><label for="field_project_address"><%= t('consultation.projectAddress') %></label><input class="form-control" id="field_project_address" name="project_address" maxlength="400" autocomplete="street-address" value="<%= formValues.project_address || '' %>"></div>
+      </div>
+    </fieldset>
+
+    <fieldset class="cm-fieldset">
+      <legend><span><%= nf(3) %></span><%= t('consultation.groupDetails') %></legend>
+      <div class="form-grid">
+        <div class="form-field"><label for="field_project_type"><%= t('consultation.projectType') %></label><input class="form-control" id="field_project_type" name="project_type" value="<%= formValues.project_type || '' %>" placeholder="<%= t('consultation.projectTypePlaceholder') %>"></div>
+        <div class="form-field"><label for="field_request_type"><%= t('consultation.requestTypeLabel') %></label><select class="form-control" id="field_request_type" name="request_type"><% Object.keys(requestTypeLabels).forEach(v => { %><option value="<%= v %>" <%= formValues.request_type===v?'selected':'' %>><%= requestTypeLabels[v] %></option><% }) %></select></div>
+        <div class="form-field"><label for="field_project_status"><%= t('consultation.projectStatusLabel') %></label><select class="form-control" id="field_project_status" name="project_status"><% Object.keys(projectStatusFormLabels).forEach(v => { %><option value="<%= v %>" <%= formValues.project_status===v?'selected':'' %>><%= projectStatusFormLabels[v] %></option><% }) %></select></div>
+        <div class="form-field form-span-2"><label for="field_project_description"><%= t('consultation.projectDescription') %> *</label><textarea class="form-control" id="field_project_description" name="project_description" rows="4" maxlength="3000" required <% if (formErrors.project_description) { %>aria-invalid="true" aria-describedby="err_project_description"<% } %>><%= formValues.project_description || '' %></textarea><% if (formErrors.project_description) { %><small class="field-error" id="err_project_description"><%= formErrors.project_description %></small><% } %></div>
+        <div class="form-field form-span-2"><label for="field_notes"><%= t('consultation.notes') %></label><textarea class="form-control" id="field_notes" name="notes" rows="3" maxlength="2000"><%= formValues.notes || '' %></textarea></div>
+        <div class="form-field form-span-2"><label for="field_attachment"><%= t('consultation.attachment') %></label><input class="form-control file-control" id="field_attachment" type="file" name="attachment" accept="image/jpeg,image/png,image/webp,image/gif" aria-describedby="hint_attachment"><small id="hint_attachment"><%= t('consultation.attachmentHint') %></small><% if (formErrors.attachment) { %><small class="field-error"><%= formErrors.attachment %></small><% } %></div>
+      </div>
+    </fieldset>
+
     <p class="privacy-note"><%= t('consultation.privacyNote') %></p>
-    <div class="form-actions"><button class="button button-primary button-large" type="submit" data-busy-label="<%= t('consultation.submitBusy') %>"><%= t('consultation.submit') %> <span>←</span></button></div>
+    <div class="form-actions"><button class="button button-primary button-large" type="submit" data-busy-label="<%= t('consultation.submitBusy') %>"><%= t('consultation.submit') %> <span aria-hidden="true"><%= locale === 'en' ? '→' : '←' %></span></button></div>
   </form>
 </div></section>
+<%
+  const mapUi = {
+    locale, statusLabels, serviceLabels, toneLabels,
+    projectsUnit: t('coverageMap.projectsUnit'),
+    closeDetails: t('coverageMap.closeDetails'),
+    selectedArea: t('consultation.selectedArea'), clearArea: t('consultation.clearArea'), areaPrefilled: t('consultation.areaPrefilled'),
+    detail: ['projectCount','projectStatus','gasStatus','riserInstall','riserLocation','plannedExpansion','services','approximate','lastUpdated','yes','no','demoNote','request','copyLink','linkCopied'].reduce((m, k) => { m[k] = t('coverageMap.detail.' + k); return m; }, {})
+  };
+%>
 <script type="application/json" id="coverage-areas-data"><%- JSON.stringify(areas).replace(/</g, '\\u003c') %></script>
-<script type="application/json" id="coverage-map-labels"><%- JSON.stringify({ requestTypeLabels, projectStatusFormLabels }).replace(/</g, '\\u003c') %></script>
+<script type="application/json" id="coverage-map-labels"><%- JSON.stringify(mapUi).replace(/</g, '\\u003c') %></script>
+<script type="application/json" id="coverage-map-tiles"><%- JSON.stringify(mapTiles).replace(/</g, '\\u003c') %></script>
 <script defer src="/public/vendor/leaflet/leaflet.js"></script>
 <script defer src="/public/js/map.js?v=<%= locals.assetVersion || '0' %>"></script>
 <%- include('partials/footer') %>
