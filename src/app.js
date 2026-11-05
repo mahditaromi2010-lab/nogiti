@@ -49,6 +49,16 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
   // developed further. Off unless FEATURE_COVERAGE_MAP=true; turning it back on needs only that env var.
   // Admin CRUD for the map data stays available either way.
   const COVERAGE_MAP_ENABLED = process.env.FEATURE_COVERAGE_MAP === 'true';
+  // Cache-busting for CSS/JS: a short hash of their contents, appended as ?v= in the views. Static files
+  // are cached by browsers for 7 days (and by the service worker), so without this a deploy could keep
+  // showing old styles/scripts to returning visitors.
+  const ASSET_VERSION = (() => {
+    const h = crypto.createHash('sha1');
+    for (const f of ['css/styles.css', 'css/elevate.css', 'js/main.js', 'js/motion.js', 'js/tools.js', 'js/map.js']) {
+      try { h.update(fs.readFileSync(path.join(ROOT, 'public', f))); } catch { /* optional file */ }
+    }
+    return h.digest('hex').slice(0, 10);
+  })();
   const PORT = Number(process.env.PORT || 3000);
   const APP_URL = (process.env.APP_URL || `http://localhost:${PORT}`).replace(/\/$/, '');
   const APP_ORIGIN = new URL(APP_URL).origin;
@@ -210,6 +220,7 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
       : (settingsCache.site_tagline || 'مهندسی با اطمینان');
     res.locals.siteEmail = settingsCache.contact_email || '';
     res.locals.coverageMapEnabled = COVERAGE_MAP_ENABLED;
+    res.locals.assetVersion = ASSET_VERSION;
     res.locals.currentUser = null;
     res.locals.currentAdmin = null;
     res.locals.can = () => false;
