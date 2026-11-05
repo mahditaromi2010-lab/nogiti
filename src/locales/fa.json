@@ -695,5 +695,10 @@
   "kicker.profile": "تنظیمات پروفایل",
   "kicker.flue": "دودکش",
   "kicker.highPressure": "فشار ۲ پوند",
-  "product.openImage": "باز کردن تصویر در اندازهٔ کامل"
+  "product.openImage": "باز کردن تصویر در اندازهٔ کامل",
+  "flash.checkout.freeAdded": "محصول رایگان به کتابخانهٔ شما اضافه شد.",
+  "product.getFree": "دریافت رایگان",
+  "product.getFreeBusy": "در حال افزودن…",
+  "product.loginToGetFree": "ورود و دریافت رایگان",
+  "product.freeNote": "رایگان است: با یک کلیک به کتابخانهٔ حساب شما اضافه می‌شود و همیشه در دسترس می‌ماند."
 }

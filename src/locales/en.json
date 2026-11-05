@@ -695,5 +695,10 @@
   "kicker.profile": "Profile settings",
   "kicker.flue": "Flue and chimney",
   "kicker.highPressure": "2 psi",
-  "product.openImage": "Open the full-size image"
+  "product.openImage": "Open the full-size image",
+  "flash.checkout.freeAdded": "Added to your library — it’s free.",
+  "product.getFree": "Get it free",
+  "product.getFreeBusy": "Adding…",
+  "product.loginToGetFree": "Sign in to get it free",
+  "product.freeNote": "It’s free: one click adds it to your account library, where it stays available."
 }

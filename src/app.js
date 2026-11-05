@@ -166,7 +166,8 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
 
   const asyncRoute = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
   const slugBase = text => String(text || '').trim().toLowerCase().normalize('NFKC').replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '').slice(0, 160) || `item-${Date.now()}`;
-  const money = (value, locale = 'fa') => locale === 'en'
+  // A price of 0 means a free product (one-click access, no payment gateway).
+  const money = (value, locale = 'fa') => Number(value || 0) === 0 ? (locale === 'en' ? 'Free' : 'رایگان') : locale === 'en'
     ? `${new Intl.NumberFormat('en-US').format(Number(value || 0))} Toman`
     : `${new Intl.NumberFormat('fa-IR').format(Number(value || 0))} تومان`;
   const safeEqual = (a, b) => {
@@ -863,6 +864,23 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
     const product = productRes.rows[0];
     const already = await pool.query("SELECT 1 FROM order_items oi JOIN orders o ON o.id=oi.order_id WHERE o.user_id=$1 AND o.status='paid' AND oi.product_id=$2", [req.user.id, product.id]);
     if (already.rowCount) { setFlash(req, 'info', res.locals.t('flash.checkout.alreadyOwned')); return res.redirect('/account'); }
+    if (Number(product.price_toman) === 0) {
+      // Free product: record a paid order of 0 so the library, admin order list and access checks work
+      // exactly as for a purchase. A per-user/product advisory lock stops a double click creating two orders.
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`free-claim:${req.user.id}:${product.id}`]);
+        const again = await client.query("SELECT 1 FROM order_items oi JOIN orders o ON o.id=oi.order_id WHERE o.user_id=$1 AND o.status='paid' AND oi.product_id=$2", [req.user.id, product.id]);
+        if (!again.rowCount) {
+          const o = await client.query("INSERT INTO orders(user_id,total_toman,status,gateway,paid_at) VALUES($1,0,'paid','free',NOW()) RETURNING id", [req.user.id]);
+          await client.query('INSERT INTO order_items(order_id,product_id,title_snapshot,price_toman) VALUES($1,$2,$3,0)', [o.rows[0].id, product.id, product.title]);
+        }
+        await client.query('COMMIT');
+      } catch (e) { await client.query('ROLLBACK').catch(() => {}); throw e; } finally { client.release(); }
+      setFlash(req, 'success', res.locals.t('flash.checkout.freeAdded'));
+      return res.redirect('/account');
+    }
     if (!process.env.ZARINPAL_MERCHANT_ID) { setFlash(req, 'error', res.locals.t('flash.checkout.gatewayNotConfigured')); return res.redirect(`/shop/${product.slug}`); }
     const client = await pool.connect();
     let orderId;
@@ -1183,7 +1201,7 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
   });
   app.post('/admin/products', requireAdmin, coverUpload.single('cover'), multipartCsrf, verifyUploads(imagePolicy, '/admin/products/new'), asyncRoute(async (req, res) => {
     const form = readProductForm(req);
-    if (!form.title || !Number.isSafeInteger(form.price) || form.price < 100) { removeUploaded(req); setFlash(req, 'error', 'عنوان و قیمت معتبر (حداقل ۱۰۰ تومان) الزامی است.'); return res.redirect('/admin/products/new'); }
+    if (!form.title || !Number.isSafeInteger(form.price) || (form.price !== 0 && form.price < 100)) { removeUploaded(req); setFlash(req, 'error', 'عنوان و قیمت معتبر لازم است: ۰ برای محصول رایگان، یا حداقل ۱۰۰ تومان.'); return res.redirect('/admin/products/new'); }
     const slug = await uniqueSlug('products', normalizeText(req.body.slug, 160) || form.title);
     const cover = acceptableCoverValue(req.file, req.body.cover_url);
     const saved = await pool.query(`INSERT INTO products(slug,title,subtitle,product_type,category,short_description,description,price_toman,cover_image,status,featured,title_en,subtitle_en,short_description_en,description_en,demo_video_url,usage_guide_intro)
@@ -1204,7 +1222,7 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
     const existing = await pool.query('SELECT * FROM products WHERE id=$1', [req.params.id]);
     if (!existing.rowCount) { removeUploaded(req); return renderError(res, 404, 'محصول پیدا نشد', 'این محصول وجود ندارد.'); }
     const form = readProductForm(req);
-    if (!form.title || !Number.isSafeInteger(form.price) || form.price < 100) { removeUploaded(req); setFlash(req, 'error', 'عنوان و قیمت معتبر (حداقل ۱۰۰ تومان) الزامی است.'); return res.redirect(`/admin/products/${req.params.id}/edit`); }
+    if (!form.title || !Number.isSafeInteger(form.price) || (form.price !== 0 && form.price < 100)) { removeUploaded(req); setFlash(req, 'error', 'عنوان و قیمت معتبر لازم است: ۰ برای محصول رایگان، یا حداقل ۱۰۰ تومان.'); return res.redirect(`/admin/products/${req.params.id}/edit`); }
     const slug = await uniqueSlug('products', normalizeText(req.body.slug, 160) || form.title, req.params.id);
     const cover = acceptableCoverValue(req.file, req.body.cover_url) || (req.body.cover_url === '' && req.body.remove_cover === 'on' ? '' : existing.rows[0].cover_image);
     await pool.query(`UPDATE products SET slug=$1,title=$2,subtitle=$3,product_type=$4,category=$5,short_description=$6,description=$7,price_toman=$8,cover_image=$9,status=$10,featured=$11,title_en=$12,subtitle_en=$13,short_description_en=$14,description_en=$15,demo_video_url=$16,usage_guide_intro=$17,updated_at=NOW() WHERE id=$18`, [slug, form.title, normalizeText(req.body.subtitle, 240), form.type || existing.rows[0].product_type, normalizeText(req.body.category, 100), normalizeText(req.body.short_description, 500), normalizeText(req.body.description, 20000), form.price, cover, form.status, req.body.featured === 'on', form.titleEn, form.subtitleEn, form.shortDescriptionEn, form.descriptionEn, form.demoVideoUrl, form.usageGuideIntro, req.params.id]);
