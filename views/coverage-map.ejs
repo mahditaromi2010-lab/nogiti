@@ -9,7 +9,6 @@
   const selectedArea = areas.find(a => String(a.id) === String(formValues.coverage_area_id || ''));
   const toneLabels = { green: t('coverageMap.legendGreen'), orange: t('coverageMap.legendOrange'), blue: t('coverageMap.legendBlue'), gray: t('coverageMap.legendGray') };
 %>
-<% if (adminPreview) { %><div class="cm-preview-banner" role="status"><div class="container"><span aria-hidden="true">◐</span> <%= t('coverageMap.previewBanner') %></div></div><% } %>
 
 <section class="page-hero map-hero cm-hero"><div class="container cm-hero-grid">
   <div class="cm-hero-copy">

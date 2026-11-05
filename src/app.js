@@ -310,6 +310,13 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
     next();
   };
 
+  // While the coverage map is switched off (FEATURE_COVERAGE_MAP not "true") it is hidden from everyone,
+  // admins included: its admin sections answer 404 like the public page. The data stays in the database.
+  app.use(['/admin/coverage-areas', '/admin/consultation-requests'], (req, res, next) => {
+    if (COVERAGE_MAP_ENABLED) return next();
+    return renderError(res, 404, res.locals.t('errorPage.notFoundTitle'), res.locals.t('errorPage.notFoundMessage'));
+  });
+
   // Admin routes are never cached. Inactivity expires privileged sessions after two hours, absolute limit 12 hours.
   app.use('/admin', (req, res, next) => {
     res.setHeader('Cache-Control', 'no-store, private, max-age=0');
@@ -571,9 +578,7 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
     const r = await pool.query('SELECT * FROM coverage_areas ORDER BY city, id');
     return r.rows.map(mapCoverageRow);
   }
-  // While the feature is switched off, content admins can still open the page (marked as a preview) to
-  // check it before it goes public. Everyone else gets a 404.
-  const coverageMapVisible = req => COVERAGE_MAP_ENABLED || (!!req.admin && hasPermission(req.admin.role, 'content'));
+  const coverageMapVisible = () => COVERAGE_MAP_ENABLED;
   async function renderCoverageMap(req, res, { status = 200, formValues = {}, formErrors = {} } = {}) {
     const areas = await readCoverageAreas();
     return res.status(status).render('coverage-map', {
@@ -581,13 +586,12 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
       metaDescription: res.locals.t('coverageMap.metaDescription'),
       areas, cities: [...new Set(areas.map(a => a.city))].sort(),
       requestTypeLabels: localizedLabels(res.locals.t, REQUEST_TYPE_LABELS, 'consultation.requestType'), projectStatusFormLabels: localizedLabels(res.locals.t, PROJECT_STATUS_FORM_LABELS, 'consultation.projectStatus'), contactMethodLabels: localizedLabels(res.locals.t, CONTACT_METHOD_LABELS, 'consultation.contactMethod'),
-      summary: summarizeCoverageAreas(areas), coverageTone, mapTiles: mapTileConfig(), adminPreview: !COVERAGE_MAP_ENABLED,
+      summary: summarizeCoverageAreas(areas), coverageTone, mapTiles: mapTileConfig(),
       formValues, formErrors
     });
   }
   app.get('/coverage-map', asyncRoute(async (req, res) => {
     if (!coverageMapVisible(req)) return renderError(res, 404, res.locals.t('errorPage.notFoundTitle'), res.locals.t('errorPage.notFoundMessage'));
-    res.set('Cache-Control', COVERAGE_MAP_ENABLED ? 'no-cache' : 'no-store, private');
     return renderCoverageMap(req, res);
   }));
   // Same read function the page itself renders from server-side, exposed as JSON so the map's client-side

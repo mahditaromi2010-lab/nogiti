@@ -701,7 +701,6 @@
   "product.getFreeBusy": "در حال افزودن…",
   "product.loginToGetFree": "ورود و دریافت رایگان",
   "product.freeNote": "رایگان است: با یک کلیک به کتابخانهٔ حساب شما اضافه می‌شود و همیشه در دسترس می‌ماند.",
-  "coverageMap.previewBanner": "پیش‌نمایش مدیر — این صفحه هنوز برای عموم فعال نیست و فقط مدیران محتوا آن را می‌بینند. برای انتشار، FEATURE_COVERAGE_MAP=true را در فایل .env سرور تنظیم کنید.",
   "coverageMap.statAreas": "مناطق روی نقشه",
   "coverageMap.statsAria": "خلاصهٔ آمار نقشه (داده نمایشی)",
   "coverageMap.statusChipsLabel": "فیلتر بر اساس وضعیت پروژه",

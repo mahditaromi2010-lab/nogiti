@@ -701,7 +701,6 @@
   "product.getFreeBusy": "Adding…",
   "product.loginToGetFree": "Sign in to get it free",
   "product.freeNote": "It’s free: one click adds it to your account library, where it stays available.",
-  "coverageMap.previewBanner": "Admin preview — this page is not public yet and only content admins can see it. To publish it, set FEATURE_COVERAGE_MAP=true in the server's .env file.",
   "coverageMap.statAreas": "Areas on the map",
   "coverageMap.statsAria": "Map summary (sample data)",
   "coverageMap.statusChipsLabel": "Filter by project status",

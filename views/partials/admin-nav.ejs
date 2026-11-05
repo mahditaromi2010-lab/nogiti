@@ -12,12 +12,12 @@
       <%- navItem('/admin/products', '▤', t('adminNav.products'), at('/admin/products')) %>
       <%- navItem('/admin/articles', '▧', t('adminNav.articles'), at('/admin/articles') || at('/admin/article-images')) %>
       <%- navItem('/admin/team', '☺', t('admin.team.title'), at('/admin/team')) %>
-      <%- navItem('/admin/coverage-areas', '◫', t('adminCoverage.title'), at('/admin/coverage-areas')) %>
+      <% if (coverageMapEnabled) { %><%- navItem('/admin/coverage-areas', '◫', t('adminCoverage.title'), at('/admin/coverage-areas')) %><% } %>
     <% } %>
     <% if (can('orders') || can('users') || can('settings') || can('audit') || can('support')) { %><div class="admin-nav-label"><%= t('adminNav.siteGroup') %></div><% } %>
     <% if (can('orders')) { %><%- navItem('/admin/orders', '◷', t('adminNav.orders'), at('/admin/orders')) %><% } %>
     <% if (can('support')) { %><%- navItem('/admin/tickets', '✉', t('admin.tickets.title'), at('/admin/tickets')) %><% } %>
-    <% if (can('consultation')) { %><%- navItem('/admin/consultation-requests', '⚑', t('adminNav.consultationRequests'), at('/admin/consultation-requests')) %><% } %>
+    <% if (coverageMapEnabled && can('consultation')) { %><%- navItem('/admin/consultation-requests', '⚑', t('adminNav.consultationRequests'), at('/admin/consultation-requests')) %><% } %>
     <% if (can('users')) { %><%- navItem('/admin/users', '♙', t('adminNav.users'), at('/admin/users')) %><% } %>
     <% if (can('settings')) { %><%- navItem('/admin/settings', '⚙', t('adminNav.settings'), at('/admin/settings')) %><% } %>
     <% if (can('audit')) { %><%- navItem('/admin/audit', '⌁', t('adminNav.auditLog'), at('/admin/audit')) %><% } %>

@@ -1,5 +1,5 @@
 'use strict';
-// Coverage-map rebuild: admin preview while the page is switched off, base-map tile choice, the Map.ir key
+// Coverage-map rebuild: fully hidden (admins too) while switched off, base-map tile choice, the Map.ir key
 // expiry warning on the admin dashboard, and the server-rendered list/form wiring of the new explorer.
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -20,36 +20,25 @@ test('Hormozgan coverage map rebuild', { skip: skipReason, concurrency: false },
   let srv = await startApp({ pool, env: { FEATURE_COVERAGE_MAP: 'false', MAPIR_API_KEY: '' } });
   t.after(async () => { await srv.stop(); await pool.end(); });
 
-  await t.test('while switched off: visitors and non-content admins get 404, content admins get a marked preview', async () => {
+  await t.test('while switched off the map is hidden from everyone, admins included', async () => {
     assert.equal((await new Client(srv.base).get('/coverage-map')).status, 404);
-    const support = new Client(srv.base);
-    await support.adminLogin('qa_orders', PW);
-    assert.equal((await support.get('/coverage-map')).status, 404);
-    const admin = new Client(srv.base);
-    await admin.adminLogin('qa_content', PW);
-    const page = await admin.get('/coverage-map');
-    assert.equal(page.status, 200);
-    assert.match(page.text, /cm-preview-banner/);
-    assert.match(page.headers.get('cache-control') || '', /no-store/);
-    assert.equal((await admin.get('/api/coverage-areas')).status, 200);
-    // the preview form really submits (so the admin can try the whole flow)
-    const token = await admin.csrf('/coverage-map');
-    const r = await admin.post('/consultation-requests', { _csrf: token, full_name: 'QA-TEST پیش‌نمایش', mobile: '09120001111', city: 'بندرعباس', project_description: 'QA-TEST درخواست آزمایشی از پیش‌نمایش' });
-    assert.equal(r.status, 302);
-    assert.equal((await pool.query("SELECT COUNT(*)::int n FROM consultation_requests WHERE full_name='QA-TEST پیش‌نمایش'")).rows[0].n, 1);
-  });
-
-  await t.test('no Map.ir key: page uses the CARTO base map and the dashboard stays quiet while the page is off', async () => {
-    const admin = new Client(srv.base);
-    await admin.adminLogin('qa_content', PW);
-    const page = await admin.get('/coverage-map');
-    assert.match(page.text, /data-tile-provider="carto"/);
-    assert.doesNotMatch(page.text, /map\.ir\/shiveh/);
     const owner = new Client(srv.base);
     await owner.adminLogin('qa_owner', PW);
+    assert.equal((await owner.get('/coverage-map')).status, 404, 'no admin preview');
+    assert.equal((await owner.get('/api/coverage-areas')).status, 404);
+    assert.equal((await owner.get('/admin/coverage-areas')).status, 404);
+    assert.equal((await owner.get('/admin/coverage-areas/new')).status, 404);
+    assert.equal((await owner.get('/admin/consultation-requests')).status, 404);
+    const token = await owner.csrf('/admin/products');
+    assert.equal((await owner.post('/admin/coverage-areas', { _csrf: token, project_name: 'x' })).status, 404);
+    assert.equal((await owner.post('/consultation-requests', { _csrf: token, full_name: 'QA-TEST', mobile: '09120001111', city: 'بندرعباس', project_description: 'QA-TEST' })).status, 404);
+    assert.equal((await pool.query('SELECT COUNT(*)::int n FROM consultation_requests')).rows[0].n, 0);
     const dash = await owner.get('/admin');
     assert.equal(dash.status, 200);
+    assert.doesNotMatch(dash.text, /href="\/admin\/coverage-areas"|href="\/admin\/consultation-requests"|href="\/coverage-map"/, 'no menu links');
     assert.doesNotMatch(dash.text, /data-map-key=/);
+    // the data itself is kept for when the map is switched back on
+    assert.ok((await pool.query('SELECT COUNT(*)::int n FROM coverage_areas')).rows[0].n >= 5);
   });
 
   await srv.stop();
@@ -60,7 +49,6 @@ test('Hormozgan coverage map rebuild', { skip: skipReason, concurrency: false },
     const visitor = new Client(srv.base);
     const page = await visitor.get('/coverage-map');
     assert.equal(page.status, 200);
-    assert.doesNotMatch(page.text, /cm-preview-banner/);
     assert.match(page.text, /data-tile-provider="mapir"/);
     assert.match(page.text, /map\.ir\/shiveh\/xyz\/1\.0\.0\/Shiveh:Shiveh@EPSG:3857@png/);
     assert.match(page.text, /داده نمایشی/);
@@ -71,6 +59,8 @@ test('Hormozgan coverage map rebuild', { skip: skipReason, concurrency: false },
     await admin.adminLogin('qa_owner', PW);
     const dash = await admin.get('/admin');
     assert.match(dash.text, /data-map-key="expiring"/);
+    assert.match(dash.text, /href="\/admin\/coverage-areas"/, 'admin sections are back when switched on');
+    assert.equal((await admin.get('/admin/consultation-requests')).status, 200);
     assert.doesNotMatch(dash.text, new RegExp(soonKey.split('.')[1]), 'the key itself is never printed on the dashboard');
   });
 

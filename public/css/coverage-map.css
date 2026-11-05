@@ -9,10 +9,6 @@
   --cm-panel-shadow: 0 1px 0 var(--rule-soft, #dfe7e2), 0 24px 48px -28px rgb(6 26 21 / .45);
 }
 
-/* ---------- admin preview banner ---------- */
-.cm-preview-banner { background: var(--night, #061a15); color: #e9f6ef; font-size: 13.5px; padding: 10px 0; border-bottom: 2px solid var(--flame, #e8922a); }
-.cm-preview-banner span { color: var(--flame, #e8922a); margin-inline-end: 6px; }
-
 /* ---------- hero ---------- */
 .cm-hero-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(280px, 1fr); gap: clamp(24px, 4vw, 56px); align-items: end; }
 .cm-hero-copy .demo-disclaimer { margin-top: 18px; }

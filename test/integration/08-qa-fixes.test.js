@@ -19,8 +19,8 @@ test('QA 2026-11-05 fixes', { skip: skipReason, concurrency: false }, async t =>
     assert.equal((await c.get('/coverage-map')).status, 404);
     assert.equal((await c.get('/api/coverage-areas')).status, 404);
     assert.doesNotMatch((await c.get('/')).text, /href="\/coverage-map"/, 'no nav link while hidden');
-    // admin data management keeps working while the public page is hidden: route exists (403 for anonymous, not 404)
-    assert.equal((await c.get('/admin/coverage-areas')).status, 403);
+    // fully hidden: the admin sections are switched off too (see 11-coverage-map.test.js)
+    assert.equal((await c.get('/admin/coverage-areas')).status, 404);
   });
 
   await t.test('robots.txt and sitemap.xml exist; sitemap lists published content only', async () => {
