@@ -37,6 +37,12 @@ function i18nMiddleware() {
     res.locals.htmlLang = locale;
     // Picks the English column when present and the active locale is English, else the Persian value.
     res.locals.localizedField = (row, faKey, enKey) => (locale === 'en' && row && row[enKey]) ? row[enKey] : (row ? row[faKey] : '');
+    // Categories are free text typed in Persian in the admin panel (no English column). On English
+    // pages show them only if they contain no Persian letters; otherwise a neutral English label.
+    res.locals.categoryLabel = (value, fallbackKey = 'articles.categoryDefault') => {
+      if (locale !== 'en') return value || '';
+      return value && !/[\u0600-\u06FF]/.test(value) ? value : res.locals.t(fallbackKey);
+    };
     next();
   };
 }

@@ -673,5 +673,6 @@
   "flash.checkout.alreadyOwned": "You already have this one — it's in your library.",
   "flash.checkout.gatewayNotConfigured": "Online payment isn't set up yet. Please check back later.",
   "flash.checkout.requestFailed": "We couldn't start the payment. Try again in a moment.",
-  "site.taglineDefault": "Engineering tools, training and building-services resources"
+  "site.taglineDefault": "Engineering tools, training and building-services resources",
+  "articles.categoryDefault": "Technical articles"
 }

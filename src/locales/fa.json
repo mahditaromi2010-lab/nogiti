@@ -673,5 +673,6 @@
   "flash.checkout.alreadyOwned": "این محصول قبلاً در کتابخانهٔ شما فعال شده است.",
   "flash.checkout.gatewayNotConfigured": "درگاه پرداخت هنوز تنظیم نشده است؛ لطفاً بعداً مراجعه کنید.",
   "flash.checkout.requestFailed": "ایجاد تراکنش ناموفق بود. کمی بعد دوباره تلاش کنید.",
-  "site.taglineDefault": "ابزارهای مهندسی، آموزش تخصصی و منابع تأسیسات"
+  "site.taglineDefault": "ابزارهای مهندسی، آموزش تخصصی و منابع تأسیسات",
+  "articles.categoryDefault": "مقالات تخصصی"
 }
