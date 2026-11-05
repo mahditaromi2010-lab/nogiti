@@ -73,3 +73,28 @@ A product priced 0 currently cannot be obtained. Options: (a) treat 0 as **free*
 
 ## Test data
 Local copy only (databases `nogiti_qa`, `nogiti_test`): QA-TEST products, article, ticket, customer `09120000000`, admin `qa_test_owner`. Nothing was created on the live site.
+
+---
+
+# Visual overhaul (same branch), 2026-11-05
+
+- **Mode**: Elevate — content, routes, form fields, ids and script hooks unchanged. Layer lives in `public/css/elevate.css` (remove its `<link>` in `views/partials/header.ejs` to roll back the look).
+- **Direction**: "drafting sheet" — drawing-paper ground, deep green ink, brand emerald, gas-flame orange only inside the drawing.
+- **Signature**: hero isometric gas installation that draws itself → valve opens → gas flows → meter wakes → flames ignite (pure SVG + CSS; paused off-screen; static under reduced motion). The meter in the drawing links to `/tools#meter`.
+- **Motion tuning**: `--dur-*` / easing tokens at the top of `elevate.css`; every effect is off under `prefers-reduced-motion`.
+
+| Metric | Before | After |
+|---|---|---|
+| Lighthouse a11y (4 pages) | 94–96 | 98–100 |
+| Lighthouse best practices | 89–96 | 100 |
+| Lighthouse performance `/` / `/tools` (3 runs) | 96 / 99 | 97–99 / 97–99 |
+| LCP / CLS | 1.8–2.1 s / 0 | 1.8–2.2 s / 0 |
+| axe colour-contrast failures (9 pages × fa/en × 2 widths) | every page | **0** |
+| Persian headings with letter-spacing | yes (−1.7 px) | none |
+| Smallest text on phone | 9 px | 11.5 px (drawing labels), body 16 px |
+| Content visible with JS off | no (reveal sections) | yes |
+| UI suite | 210 | 215 / 215 |
+
+Also fixed during the overhaul: frozen "sheen" on primary buttons under reduced motion; 20 hard-coded English capital labels on Persian pages; default About text still said "Nogiti" (migration 0010, only if untouched); CSS/JS now cache-busted with `?v=<hash>`.
+
+Not verified: Firefox and Safari/WebKit (only Chromium in this workspace). Scroll-driven effects simply don't animate where unsupported; content is unaffected. Remaining moderate axe items (heading order on cards, nested `aside`) are pre-existing structure, not changed in Elevate mode.
