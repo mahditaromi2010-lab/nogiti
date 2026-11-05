@@ -1,6 +1,6 @@
 <%- include('partials/header', {title}) %>
 <section class="account-section section"><div class="container">
-  <div class="account-welcome"><div><span class="section-kicker">SUPPORT</span><h1><%= t('tickets.newTicket') %></h1></div><a class="button button-outline" href="/account/tickets"><%= t('common.back') %></a></div>
+  <div class="account-welcome"><div><span class="section-kicker"><%= t('kicker.support') %></span><h1><%= t('tickets.newTicket') %></h1></div><a class="button button-outline" href="/account/tickets"><%= t('common.back') %></a></div>
   <section class="account-panel">
     <form action="/account/tickets" method="post" class="profile-form">
       <input type="hidden" name="_csrf" value="<%= csrfToken %>">

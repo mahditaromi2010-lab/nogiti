@@ -1,6 +1,6 @@
 <%- include('partials/header', {title}) %>
 <section class="account-section section"><div class="container">
-  <div class="account-welcome"><div><span class="section-kicker">SUPPORT #<%= ticket.id %></span><h1><%= ticket.subject %></h1><p><span class="status-pill status-ticket-<%= ticket.status %>"><%= t('tickets.status.'+ticket.status) %></span> · <%= t('tickets.category.'+ticket.category) %> · <%= t('tickets.priority.'+ticket.priority) %></p></div><a class="button button-outline" href="/account/tickets"><%= t('common.back') %></a></div>
+  <div class="account-welcome"><div><span class="section-kicker"><%= t('kicker.support') %> #<%= ticket.id %></span><h1><%= ticket.subject %></h1><p><span class="status-pill status-ticket-<%= ticket.status %>"><%= t('tickets.status.'+ticket.status) %></span> · <%= t('tickets.category.'+ticket.category) %> · <%= t('tickets.priority.'+ticket.priority) %></p></div><a class="button button-outline" href="/account/tickets"><%= t('common.back') %></a></div>
   <section class="account-panel">
     <h2 class="sr-only"><%= t('tickets.thread') %></h2>
     <div class="ticket-thread">

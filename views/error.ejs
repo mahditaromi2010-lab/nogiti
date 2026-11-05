@@ -1,5 +1,5 @@
 <%- include('partials/header', {title}) %>
-<section class="error-page section"><div class="container"><div class="error-card"><span class="error-mark" aria-hidden="true">N/</span><span class="section-kicker">Novingity / MESSAGE</span><h1><%= title %></h1><p><%= message %></p>
+<section class="error-page section"><div class="container"><div class="error-card"><span class="error-mark" aria-hidden="true">N/</span><span class="section-kicker"><%= t('kicker.message') %></span><h1><%= title %></h1><p><%= message %></p>
 <% if (typeof requestId !== 'undefined' && requestId && typeof message === 'string' && (message.includes('کد پیگیری') || message.includes('reference'))) { %><p class="error-ref"><%= t('errorPage.refCode') %>: <code dir="ltr"><%= requestId %></code></p><% } %>
 <div class="error-actions"><% if (typeof actionHref !== 'undefined' && actionHref) { %><a href="<%= actionHref %>" class="button button-primary"><%= actionLabel || t('errorPage.continue') %> ←</a><a href="/" class="button button-outline"><%= t('errorPage.homePage') %></a><% } else { %><a href="/" class="button button-primary"><%= t('errorPage.backHome') %> ←</a><% } %></div>
 </div></div></section>

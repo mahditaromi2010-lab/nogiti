@@ -1,6 +1,6 @@
 <%- include('partials/header', {title}) %>
 <section class="account-section section"><div class="container">
-  <div class="account-welcome"><div><span class="section-kicker">SUPPORT</span><h1><%= t('tickets.myTickets') %></h1><p><%= t('tickets.title') %></p></div><a class="button button-primary" href="/account/tickets/new">＋ <%= t('tickets.newTicket') %></a></div>
+  <div class="account-welcome"><div><span class="section-kicker"><%= t('kicker.support') %></span><h1><%= t('tickets.myTickets') %></h1><p><%= t('tickets.title') %></p></div><a class="button button-primary" href="/account/tickets/new">＋ <%= t('tickets.newTicket') %></a></div>
   <section class="account-panel">
     <% if (tickets.length) { %>
     <div class="table-responsive"><table class="data-table"><caption class="sr-only"><%= t('tickets.myTickets') %></caption><thead><tr><th scope="col">#</th><th scope="col"><%= t('tickets.subject') %></th><th scope="col"><%= t('common.category') %></th><th scope="col"><%= t('common.status') %></th><th scope="col"><%= t('common.date') %></th></tr></thead><tbody>

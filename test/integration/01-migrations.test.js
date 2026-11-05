@@ -12,7 +12,7 @@ test('migrations on PostgreSQL', { skip: skipReason, concurrency: false }, async
   t.after(() => pool.end());
 
   const ALL_MIGRATIONS = ['0001_baseline', '0002_hardening', '0003_team_members', '0004_bilingual_content', '0005_support_tickets',
-    '0006_brand_rename', '0007_plugin_content', '0008_coverage_map', '0009_consultation_requests'];
+    '0006_brand_rename', '0007_plugin_content', '0008_coverage_map', '0009_consultation_requests', '0010_about_text_brand'];
 
   await t.test('fresh database: all migrations apply, re-run is a no-op', async () => {
     await resetDatabase(pool);
@@ -47,10 +47,14 @@ test('migrations on PostgreSQL', { skip: skipReason, concurrency: false }, async
     assert.equal((await pool.query("SELECT setting_value FROM site_settings WHERE setting_key='site_name'")).rows[0].setting_value, 'نام سفارشی', 'custom site name preserved');
   });
 
-  await t.test('rollback of 0009-0002 is reversible and keeps user data', async () => {
+  await t.test('rollback of 0010-0002 is reversible and keeps user data', async () => {
     await pool.query("INSERT INTO rate_limit_hits(key_hash) VALUES(repeat('a',64))");
     await pool.query("INSERT INTO team_members(name) VALUES('نمونه')");
     // Only the most recently applied migration can be rolled back; roll them off in reverse order.
+    const about = async () => (await pool.query("SELECT setting_value v FROM site_settings WHERE setting_key='about_text'")).rows[0]?.v;
+    const aboutAfter = await about();
+    assert.equal(await migrateDown(pool, '0010'), '0010_about_text_brand');
+    if (aboutAfter && aboutAfter.startsWith('Novingity بستری')) assert.match(await about(), /^Nogiti بستری/, '0010 down restores the old default');
     assert.equal(await migrateDown(pool, '0009'), '0009_consultation_requests');
     assert.equal((await pool.query("SELECT to_regclass('public.consultation_requests') AS t")).rows[0].t, null);
     assert.equal(await migrateDown(pool, '0008'), '0008_coverage_map');
@@ -70,7 +74,14 @@ test('migrations on PostgreSQL', { skip: skipReason, concurrency: false }, async
     assert.equal(Number((await pool.query('SELECT COUNT(*) n FROM users')).rows[0].n), 2);
     await assert.rejects(migrateDown(pool, '0001'), /no reviewed \.down\.sql|Only the most recently applied/);
     assert.deepEqual(await migrateUp(pool), ['0002_hardening', '0003_team_members', '0004_bilingual_content', '0005_support_tickets',
-      '0006_brand_rename', '0007_plugin_content', '0008_coverage_map', '0009_consultation_requests']);
+      '0006_brand_rename', '0007_plugin_content', '0008_coverage_map', '0009_consultation_requests', '0010_about_text_brand']);
+  });
+
+  await t.test('0010 renames the brand only in the untouched default About text', async () => {
+    assert.equal(await migrateDown(pool, '0010'), '0010_about_text_brand');
+    await pool.query("UPDATE site_settings SET setting_value='Nogiti — متن نوشته‌شده توسط مدیر' WHERE setting_key='about_text'");
+    await migrateUp(pool);
+    assert.equal((await pool.query("SELECT setting_value v FROM site_settings WHERE setting_key='about_text'")).rows[0].v, 'Nogiti — متن نوشته‌شده توسط مدیر', 'admin-written text is never overwritten');
   });
 
   await t.test('an edited, already-applied migration is detected', async () => {
