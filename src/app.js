@@ -45,6 +45,10 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
   if (!pool) throw new Error('createApp requires a pg pool');
   const app = express();
   const IS_PROD = process.env.NODE_ENV === 'production';
+  // Hormozgan coverage map + consultation form: hidden at the owner's request (2026-11-02) until it is
+  // developed further. Off unless FEATURE_COVERAGE_MAP=true; turning it back on needs only that env var.
+  // Admin CRUD for the map data stays available either way.
+  const COVERAGE_MAP_ENABLED = process.env.FEATURE_COVERAGE_MAP === 'true';
   const PORT = Number(process.env.PORT || 3000);
   const APP_URL = (process.env.APP_URL || `http://localhost:${PORT}`).replace(/\/$/, '');
   const APP_ORIGIN = new URL(APP_URL).origin;
@@ -199,8 +203,13 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
     res.locals.csrfToken = { toString: csrfToken, valueOf: csrfToken, toJSON: csrfToken };
     res.locals.money = value => money(value, res.locals.locale);
     res.locals.siteName = settingsCache.site_name || 'Novingity';
-    res.locals.siteTagline = settingsCache.site_tagline || 'مهندسی با اطمینان';
+    // English pages never show the Persian admin-entered tagline: they use its English counterpart
+    // (admin settings), else a written English default.
+    res.locals.siteTagline = res.locals.locale === 'en'
+      ? (settingsCache.site_tagline_en || res.locals.t('site.taglineDefault'))
+      : (settingsCache.site_tagline || 'مهندسی با اطمینان');
     res.locals.siteEmail = settingsCache.contact_email || '';
+    res.locals.coverageMapEnabled = COVERAGE_MAP_ENABLED;
     res.locals.currentUser = null;
     res.locals.currentAdmin = null;
     res.locals.can = () => false;
@@ -225,6 +234,8 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
         req.session.role = null;
       } else {
         req.user = u.rows[0];
+        // Private, per-user pages: never let the browser keep them (Back after logout must not show them).
+        res.set('Cache-Control', 'no-store, private, max-age=0');
         res.locals.currentUser = req.user;
       }
     }
@@ -249,13 +260,13 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
 
   // Numeric route ids: malformed values are a 404, never a database error (previously HTTP 500).
   app.param('id', (req, res, next, value) => {
-    if (!/^[1-9]\d{0,17}$/.test(String(value))) return renderError(res, 404, 'پیدا نشد', 'شناسهٔ درخواست‌شده معتبر نیست.');
+    if (!/^[1-9]\d{0,17}$/.test(String(value))) return renderError(res, 404, res.locals.t('errorPage.notFoundTitle'), res.locals.t('errorPage.invalidIdMessage'));
     next();
   });
 
   const rateOptions = (limit, windowMs = 15 * 60 * 1000) => rateLimit({
     windowMs, limit, standardHeaders: 'draft-7', legacyHeaders: false,
-    handler: (req, res) => renderError(res, 429, 'درخواست‌های زیاد', 'تعداد درخواست‌ها بیش از حد مجاز است. کمی بعد دوباره امتحان کنید.')
+    handler: (req, res) => renderError(res, 429, res.locals.t('errorPage.tooManyTitle'), res.locals.t('errorPage.tooManyMessage'))
   });
   // Coarse per-process flood control on public OTP endpoints (credential-failure counting for admins is durable, see PgThrottle).
   const verifyCodeLimiter = rateOptions(8);
@@ -457,7 +468,7 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
   }));
   app.get('/shop/:slug', asyncRoute(async (req, res) => {
     const p = await pool.query("SELECT * FROM products WHERE slug=$1 AND status='published'", [req.params.slug]);
-    if (!p.rowCount) return renderError(res, 404, 'محصول پیدا نشد', 'این محصول وجود ندارد یا در حال حاضر منتشر نشده است.');
+    if (!p.rowCount) return renderError(res, 404, res.locals.t('errorPage.productNotFoundTitle'), res.locals.t('errorPage.productNotFoundMessage'));
     const product = p.rows[0];
     let owned = false;
     if (req.user) {
@@ -482,7 +493,7 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
   }));
   app.get('/articles/:slug', asyncRoute(async (req, res) => {
     const r = await pool.query("SELECT * FROM articles WHERE slug=$1 AND status='published'", [req.params.slug]);
-    if (!r.rowCount) return renderError(res, 404, 'مقاله پیدا نشد', 'این مقاله وجود ندارد یا منتشر نشده است.');
+    if (!r.rowCount) return renderError(res, 404, res.locals.t('errorPage.articleNotFoundTitle'), res.locals.t('errorPage.articleNotFoundMessage'));
     const article = r.rows[0];
     const images = await pool.query('SELECT id,image_path,alt_text,sort_order FROM article_images WHERE article_id=$1 ORDER BY sort_order,id', [article.id]);
     const bodySource = (req.locale === 'en' && article.content_en) ? article.content_en : article.content;
@@ -518,14 +529,34 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
       description: r.description, isDemo: r.is_demo, lastUpdated: r.last_updated
     };
   }
+  // ───────────── Crawlers: robots.txt and sitemap.xml ─────────────
+  app.get('/robots.txt', (_req, res) => {
+    res.type('text/plain').send([
+      'User-agent: *',
+      'Disallow: /admin', 'Disallow: /account', 'Disallow: /auth/', 'Disallow: /checkout/', 'Disallow: /payments/', 'Disallow: /lang/',
+      `Sitemap: ${APP_URL}/sitemap.xml`, ''
+    ].join('\n'));
+  });
+  app.get('/sitemap.xml', asyncRoute(async (_req, res) => {
+    const [products, articles] = await Promise.all([
+      pool.query("SELECT slug, updated_at FROM products WHERE status='published' ORDER BY updated_at DESC LIMIT 5000"),
+      pool.query("SELECT slug, updated_at FROM articles WHERE status='published' ORDER BY updated_at DESC LIMIT 5000")
+    ]);
+    const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const url = (loc, lastmod) => `  <url><loc>${esc(APP_URL + loc)}</loc>${lastmod ? `<lastmod>${new Date(lastmod).toISOString().slice(0, 10)}</lastmod>` : ''}</url>`;
+    const urls = ['/', '/tools', '/shop', '/articles', '/about'].map(p => url(p))
+      .concat(products.rows.map(r => url(`/shop/${encodeURIComponent(r.slug)}`, r.updated_at)))
+      .concat(articles.rows.map(r => url(`/articles/${encodeURIComponent(r.slug)}`, r.updated_at)));
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.type('application/xml').send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join('\n')}\n</urlset>\n`);
+  }));
+
   async function readCoverageAreas() {
     const r = await pool.query('SELECT * FROM coverage_areas ORDER BY city, id');
     return r.rows.map(mapCoverageRow);
   }
   app.get('/coverage-map', asyncRoute(async (req, res) => {
-    // Temporarily hidden at owner's request (2026-11-02): public page disabled, 404, pending further
-    // development. Underlying route/view/data/admin CRUD are left fully intact to resume later.
-    if (true) return renderError(res, 404, 'پیدا نشد', 'این صفحه موجود نیست.');
+    if (!COVERAGE_MAP_ENABLED) return renderError(res, 404, res.locals.t('errorPage.notFoundTitle'), res.locals.t('errorPage.notFoundMessage'));
     const areas = await readCoverageAreas();
     res.render('coverage-map', {
       title: res.locals.t('coverageMap.pageTitle'),
@@ -538,8 +569,7 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
   // Same read function the page itself renders from server-side, exposed as JSON so the map's client-side
   // filters/search work over the live dataset without a full page reload.
   app.get('/api/coverage-areas', asyncRoute(async (req, res) => {
-    // Hidden alongside /coverage-map (see note above, 2026-11-02).
-    if (true) return res.status(404).json({ error: 'not found' });
+    if (!COVERAGE_MAP_ENABLED) return res.status(404).json({ error: 'not found' });
     const areas = await readCoverageAreas();
     const filtered = filterCoverageAreas(areas, { city: req.query.city, status: req.query.status, gasService: req.query.gasService, riser: req.query.riser, search: req.query.q });
     res.json({ areas: filtered, summary: summarizeCoverageAreas(filtered) });
@@ -550,8 +580,7 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
   const CONSULTATION_PROJECT_STATUSES = Object.keys(PROJECT_STATUS_FORM_LABELS);
   const CONSULTATION_CONTACT_METHODS = Object.keys(CONTACT_METHOD_LABELS);
   app.post('/consultation-requests', coverUpload.single('attachment'), multipartCsrf, verifyUploads(imagePolicy, '/coverage-map#consultation-form'), asyncRoute(async (req, res) => {
-    // Hidden alongside /coverage-map (see note above, 2026-11-02).
-    if (true) return renderError(res, 404, 'پیدا نشد', 'این صفحه موجود نیست.');
+    if (!COVERAGE_MAP_ENABLED) return renderError(res, 404, res.locals.t('errorPage.notFoundTitle'), res.locals.t('errorPage.notFoundMessage'));
     const fullName = normalizeText(req.body.full_name, 160);
     const mobileRaw = String(req.body.mobile || '');
     const mobile = normalizeIranMobile(mobileRaw);
@@ -816,11 +845,11 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
   // No access is granted from the callback query alone; the gateway's verify response is authoritative.
   app.post('/checkout/:id', requireAuth, asyncRoute(async (req, res) => {
     const productRes = await pool.query("SELECT * FROM products WHERE id=$1 AND status='published'", [req.params.id]);
-    if (!productRes.rowCount) { setFlash(req, 'error', 'محصول در دسترس نیست.'); return res.redirect('/shop'); }
+    if (!productRes.rowCount) { setFlash(req, 'error', res.locals.t('flash.checkout.unavailable')); return res.redirect('/shop'); }
     const product = productRes.rows[0];
     const already = await pool.query("SELECT 1 FROM order_items oi JOIN orders o ON o.id=oi.order_id WHERE o.user_id=$1 AND o.status='paid' AND oi.product_id=$2", [req.user.id, product.id]);
-    if (already.rowCount) { setFlash(req, 'info', 'این محصول قبلاً در کتابخانهٔ شما فعال شده است.'); return res.redirect('/account'); }
-    if (!process.env.ZARINPAL_MERCHANT_ID) { setFlash(req, 'error', 'درگاه پرداخت هنوز تنظیم نشده است؛ لطفاً بعداً مراجعه کنید.'); return res.redirect(`/shop/${product.slug}`); }
+    if (already.rowCount) { setFlash(req, 'info', res.locals.t('flash.checkout.alreadyOwned')); return res.redirect('/account'); }
+    if (!process.env.ZARINPAL_MERCHANT_ID) { setFlash(req, 'error', res.locals.t('flash.checkout.gatewayNotConfigured')); return res.redirect(`/shop/${product.slug}`); }
     const client = await pool.connect();
     let orderId;
     try {
@@ -844,7 +873,7 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
     } catch (err) {
       logger.error('payment request failed', { requestId: req.id, orderId, error: err });
       await pool.query("UPDATE orders SET status='failed',updated_at=NOW() WHERE id=$1 AND status='pending'", [orderId]);
-      setFlash(req, 'error', 'ایجاد تراکنش ناموفق بود. کمی بعد دوباره تلاش کنید.');
+      setFlash(req, 'error', res.locals.t('flash.checkout.requestFailed'));
       res.redirect(`/shop/${product.slug}`);
     }
   }));
@@ -1351,7 +1380,7 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
   // ───────────── Settings ─────────────
   app.get('/admin/settings', requireAdmin, asyncRoute(async (_req, res) => res.render('admin/settings', { title: 'تنظیمات سایت', settings: await getSettings(), errors: {} })));
   app.post('/admin/settings', requireAdmin, asyncRoute(async (req, res) => {
-    const fields = { site_name: 100, site_tagline: 200, contact_email: 180, contact_phone: 40, instagram: 100, about_text: 2000 };
+    const fields = { site_name: 100, site_tagline: 200, site_tagline_en: 200, contact_email: 180, contact_phone: 40, instagram: 100, about_text: 2000, about_text_en: 2000 };
     const values = Object.fromEntries(Object.entries(fields).map(([key, max]) => [key, normalizeText(req.body[key], max)]));
     values.contact_phone = digitsEnglish(values.contact_phone);
     const errors = {};
@@ -1449,7 +1478,7 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
     res.redirect('/admin/team');
   }));
 
-  app.use((req, res) => renderError(res, 404, 'صفحه پیدا نشد', 'نشانی واردشده وجود ندارد. از منوی سایت به صفحهٔ موردنظر بروید.'));
+  app.use((req, res) => renderError(res, 404, res.locals.t('errorPage.notFoundTitle'), res.locals.t('errorPage.notFoundMessage')));
   app.use((err, req, res, _next) => {
     removeUploaded(req);
     if (err instanceof multer.MulterError) {

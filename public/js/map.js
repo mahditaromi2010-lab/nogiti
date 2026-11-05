@@ -8,7 +8,7 @@
 
   // Mirrors the fa/en split in src/locales/*.json; locale is set by the page via window.NG_LOCALE
   // (see views/coverage-map.ejs), same pattern as public/js/tools.js.
-  const MAP_LOCALE = (typeof window !== 'undefined' && window.NG_LOCALE === 'en') ? 'en' : 'fa';
+  const MAP_LOCALE = document.documentElement.dataset.locale === 'en' ? 'en' : 'fa';
   const MAP_TEXT = {
     projectCountLabel: { fa: 'تعداد پروژه (نمونه)', en: 'Project count (sample)' },
     projectStatusLabel: { fa: 'وضعیت پروژه', en: 'Project status' },

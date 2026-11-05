@@ -1,5 +1,4 @@
 <%- include('partials/header', {title, metaDescription}) %>
-<script>window.NG_LOCALE = '<%= locale %>';</script>
 <link rel="stylesheet" href="/public/vendor/leaflet/leaflet.css">
 <section class="page-hero map-hero"><div class="container"><div class="breadcrumb"><a href="/"><%= t('tools.breadcrumbHome') %></a><span>/</span><span><%= t('coverageMap.breadcrumbSelf') %></span></div><span class="section-kicker">HORMOZGAN COVERAGE MAP</span><h1><%= t('coverageMap.titlePre') %><br><em><%= t('coverageMap.titleEm') %></em></h1><p><%= t('coverageMap.lead') %></p>
 <div class="tools-disclaimer demo-disclaimer"><span>⚠</span><p><b><%= t('coverageMap.disclaimerLabel') %></b> <%= t('coverageMap.disclaimerText') %></p></div>
@@ -63,8 +62,8 @@
     <div class="form-actions"><button class="button button-primary button-large" type="submit" data-busy-label="<%= t('consultation.submitBusy') %>"><%= t('consultation.submit') %> <span>←</span></button></div>
   </form>
 </div></section>
-<script type="application/json" id="coverage-areas-data"><%- JSON.stringify(areas) %></script>
-<script type="application/json" id="coverage-map-labels"><%- JSON.stringify({ requestTypeLabels, projectStatusFormLabels }) %></script>
+<script type="application/json" id="coverage-areas-data"><%- JSON.stringify(areas).replace(/</g, '\\u003c') %></script>
+<script type="application/json" id="coverage-map-labels"><%- JSON.stringify({ requestTypeLabels, projectStatusFormLabels }).replace(/</g, '\\u003c') %></script>
 <script defer src="/public/vendor/leaflet/leaflet.js"></script>
 <script defer src="/public/js/map.js"></script>
 <%- include('partials/footer') %>

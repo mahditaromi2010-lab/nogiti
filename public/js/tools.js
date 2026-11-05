@@ -4,7 +4,25 @@
 // build at runtime (numbers mixed into sentences can't go through the server's t() helper, which
 // only resolves a page's static copy). Mirrors the fa/en split in src/locales/*.json; the active
 // locale is set by the page itself via window.NG_LOCALE (see views/tools.ejs).
-const NG_LOCALE = (typeof window !== 'undefined' && window.NG_LOCALE === 'en') ? 'en' : 'fa';
+// Read from <html data-locale> (set server-side in views/partials/header.ejs). An inline
+// `window.NG_LOCALE = ...` script used to set this, but the site's CSP (script-src 'self') blocks
+// inline scripts, so English pages silently fell back to Persian results.
+const NG_LOCALE = (typeof document !== 'undefined' && document.documentElement.dataset.locale === 'en') ? 'en' : 'fa';
+
+// Parse a number the way Iranian users type it: Persian (۰-۹) or Arabic-Indic (٠-٩) digits, the
+// Persian decimal separator (٫) or a comma, surrounding spaces. Returns NaN for anything else.
+function toNumber(raw) {
+  const s = String(raw ?? '')
+    .replace(/[\u06F0-\u06F9]/g, d => String(d.charCodeAt(0) - 0x06F0))
+    .replace(/[\u0660-\u0669]/g, d => String(d.charCodeAt(0) - 0x0660))
+    .replace(/[\u066B,\u060C]/g, '.')
+    .replace(/[\s\u200c\u200f\u200e]/g, '');
+  return /^-?(\d+\.?\d*|\.\d+)$/.test(s) ? parseFloat(s) : NaN;
+}
+function num(idOrEl) {
+  const el = typeof idOrEl === 'string' ? document.getElementById(idOrEl) : idOrEl;
+  return toNumber(el ? el.value : '');
+}
 const NG_TEXT = {
   invalidPositive: { fa: 'لطفاً مقادیر معتبر و مثبت وارد کنید.', en: 'Please enter valid, positive values.' },
   invalidChimney: { fa: 'لطفاً مقادیر معتبر وارد کنید (ارتفاع و مصرف مثبت، طول می‌تواند صفر باشد).', en: 'Please enter valid values (height and load must be positive; connector length can be zero).' },
@@ -64,9 +82,9 @@ const chimneyDiametersByLocale = {
 };
 
 function calculateVentilation() {
-    const area = parseFloat(document.getElementById('area').value);
-    const height = parseFloat(document.getElementById('height').value);
-    const cons = parseFloat(document.getElementById('deviceConsumption').value);
+    const area = num('area');
+    const height = num('height');
+    const cons = num('deviceConsumption');
     if (!area || !height || !cons || area <= 0 || height <= 0 || cons <= 0) {
         alert(tr('invalidPositive')); return;
     }
@@ -85,8 +103,8 @@ function calculateVentilation() {
 }
 
 function calculatePipeSize() {
-    const length = parseFloat(document.getElementById('pipeLength').value);
-    const cons = parseFloat(document.getElementById('consumption').value);
+    const length = num('pipeLength');
+    const cons = num('consumption');
     if (!length || !cons || length <= 0 || cons <= 0) { alert(tr('invalidPositive')); return; }
     // Complete low-pressure (1/4 psi) pipe-sizing table, owner-supplied 2026-11-04. Replaces the
     // previous table, which was missing several length rows (12/14/16/18/22/24/26/28/35/45 m) and
@@ -157,8 +175,8 @@ const hpTable = [
 const hpDiameters = ['¾"', '1"', '1¼"', '1½"', '2"', '2½"', '3"', '4"', '6"'];
 
 function calculateHighPressurePipe() {
-    const length = parseFloat(document.getElementById('hpPipeLength').value);
-    const cons = parseFloat(document.getElementById('hpConsumption').value);
+    const length = num('hpPipeLength');
+    const cons = num('hpConsumption');
     const res = document.getElementById('hpPipeResult');
 
     if (!length || !cons || length <= 0 || cons <= 0) {
@@ -229,9 +247,9 @@ const chimneyTable = [
 ];
 
 function calculateChimney() {
-    const height = parseFloat(document.getElementById('chimneyHeight').value);
-    const length = parseFloat(document.getElementById('chimneyLength').value);
-    const cons = parseFloat(document.getElementById('chimneyConsumption').value);
+    const height = num('chimneyHeight');
+    const length = num('chimneyLength');
+    const cons = num('chimneyConsumption');
 
     if (!Number.isFinite(height) || !Number.isFinite(length) || !Number.isFinite(cons) || height <= 0 || cons <= 0 || length < 0) {
         alert(tr('invalidChimney'));
@@ -304,19 +322,19 @@ fuelSelect.addEventListener('change', () => {
     else if (liquidInput.value !== '') convertFromLiquid();
 });
 function convertFromGas() {
-    const g = parseFloat(gasInput.value);
+    const g = num(gasInput);
     if (isNaN(g) || g < 0) { liquidInput.value = ''; return; }
     liquidInput.value = (g / parseFloat(fuelSelect.value)).toFixed(2);
 }
 function convertFromLiquid() {
-    const l = parseFloat(liquidInput.value);
+    const l = num(liquidInput);
     if (isNaN(l) || l < 0) { gasInput.value = ''; return; }
     gasInput.value = (l * parseFloat(fuelSelect.value)).toFixed(2);
 }
 updateFactorDisplay();
 
 function calculateMeter() {
-    const c = parseFloat(document.getElementById('meterConsumption').value);
+    const c = num('meterConsumption');
     const res = document.getElementById('meterResult');
     if (isNaN(c) || c <= 0) { res.innerHTML = tr('invalidConsumption'); res.classList.add('show'); return; }
 
@@ -324,22 +342,24 @@ function calculateMeter() {
     // 2026-11-02 pass mistakenly replaced them with coarser approximated ranges from a photographed
     // table). G2.5 is built onto the same table using its own authoritative spec (substitute pipe
     // length 11 cm, diameter 1", wall clearance 10 cm - same clearance as G4/G6).
+    // Brackets are contiguous (each starts just above the previous upper bound), so values like
+    // 4.05 or 6.05 m³/h get a meter class instead of a false "out of range" message.
     let meter, wall, length, diam;
     if (c >= 0.1 && c <= 4) {
         meter = 'G2.5'; wall = '10 cm'; length = '11 cm'; diam = '1"';
-    } else if (c >= 4.1 && c <= 6) {
+    } else if (c > 4 && c <= 6) {
         meter = 'G4'; wall = '10 cm'; length = '15.5 cm'; diam = '1"';
-    } else if (c >= 6.1 && c <= 10) {
+    } else if (c > 6 && c <= 10) {
         meter = 'G6'; wall = '10 cm'; length = '22.5 cm'; diam = '1"';
-    } else if (c >= 10.1 && c <= 16) {
+    } else if (c > 10 && c <= 16) {
         meter = 'G10'; wall = '15 cm'; length = '28 cm'; diam = '1½"';
-    } else if (c >= 16.1 && c <= 25) {
+    } else if (c > 16 && c <= 25) {
         meter = 'G16'; wall = '15 cm'; length = '28 cm'; diam = '1½"';
-    } else if (c >= 25.1 && c <= 40) {
+    } else if (c > 25 && c <= 40) {
         meter = 'G25'; wall = '25 cm'; length = '33.5 cm'; diam = '2"';
-    } else if (c >= 40.1 && c <= 65) {
+    } else if (c > 40 && c <= 65) {
         meter = 'G40'; wall = '30 cm'; length = '68 cm'; diam = '2"';
-    } else if (c >= 65.1 && c <= 100) {
+    } else if (c > 65 && c <= 100) {
         meter = 'G65'; wall = '30 cm'; length = '68 cm'; diam = '2"';
     } else {
         res.innerHTML = tr('meterRangeError');
@@ -372,8 +392,8 @@ if (liquidEl) liquidEl.addEventListener('input', convertFromLiquid);
 // Never silently return the largest table diameter when entered demand is above capacity.
 const oldCalculatePipeSize = calculatePipeSize;
 calculatePipeSize = function () {
-  const length = parseFloat(document.getElementById('pipeLength').value);
-  const cons = parseFloat(document.getElementById('consumption').value);
+  const length = num('pipeLength');
+  const cons = num('consumption');
   if (!Number.isFinite(length) || !Number.isFinite(cons) || length <= 0 || cons <= 0) {
     alert(tr('pipeInvalidLength')); return;
   }

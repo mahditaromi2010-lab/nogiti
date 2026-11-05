@@ -659,5 +659,19 @@
   "roleLabel.ownerCreateFlashSuffix": "with the role of",
   "flash.admins.createdPart1": "The admin account \"",
   "flash.admins.createdPart2": "\" was created with the role of ",
-  "flash.admins.createdPart3": "."
+  "flash.admins.createdPart3": ".",
+  "errorPage.notFoundTitle": "Page not found",
+  "errorPage.notFoundMessage": "There's nothing at this address. Use the menu to find the page you were after.",
+  "errorPage.invalidIdMessage": "That ID doesn't look right.",
+  "errorPage.productNotFoundTitle": "Product not found",
+  "errorPage.productNotFoundMessage": "This product doesn't exist or isn't published right now.",
+  "errorPage.articleNotFoundTitle": "Article not found",
+  "errorPage.articleNotFoundMessage": "This article doesn't exist or isn't published.",
+  "errorPage.tooManyTitle": "Too many requests",
+  "errorPage.tooManyMessage": "You've sent a lot of requests in a short time. Wait a few minutes and try again.",
+  "flash.checkout.unavailable": "This product isn't available.",
+  "flash.checkout.alreadyOwned": "You already have this one — it's in your library.",
+  "flash.checkout.gatewayNotConfigured": "Online payment isn't set up yet. Please check back later.",
+  "flash.checkout.requestFailed": "We couldn't start the payment. Try again in a moment.",
+  "site.taglineDefault": "Engineering tools, training and building-services resources"
 }

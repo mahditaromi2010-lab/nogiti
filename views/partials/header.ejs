@@ -14,6 +14,8 @@
   <title><%= title ? `${title} | ${siteName}` : `${siteName} | ${t('meta.defaultTitleSuffix')}` %></title>
   <link rel="preload" href="/public/fonts/Vazirmatn-Variable.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/public/css/styles.css">
+  <%# Scroll-reveal content starts hidden and is shown by motion.js; without JavaScript it must simply be visible. %>
+  <noscript><style>.reveal-on-scroll,.reveal-stagger .reveal-item{opacity:1!important;transform:none!important}</style></noscript>
   <script defer src="/public/js/main.js"></script>
   <script defer src="/public/js/motion.js"></script>
 </head>
@@ -27,8 +29,8 @@
       <a href="/tools"><%= t('nav.tools') %></a>
       <a href="/shop"><%= t('nav.shop') %></a>
       <a href="/articles"><%= t('nav.articles') %></a>
-<%# Hormozgan coverage map nav link temporarily hidden at owner's request (2026-11-02); feature code intact for future resumption %>
-      <a href="/about"><%= t('nav.about') %></a>
+<% if (coverageMapEnabled) { %>      <a href="/coverage-map"><%= t('nav.coverageMap') %></a>
+<% } %>      <a href="/about"><%= t('nav.about') %></a>
       <% if (currentUser) { %><a href="/account/tickets"><%= t('nav.support') %></a><% } %>
       <% if (currentAdmin) { %><a href="<%= can('overview') ? '/admin' : (roleHome || '/admin/account') %>" class="nav-admin"><%= t('nav.admin') %></a><% } %>
     </nav>

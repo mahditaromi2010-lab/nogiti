@@ -659,5 +659,19 @@
   "roleLabel.ownerCreateFlashSuffix": "با نقش",
   "flash.admins.createdPart1": "حساب مدیریتی «",
   "flash.admins.createdPart2": "» با نقش ",
-  "flash.admins.createdPart3": " ساخته شد."
+  "flash.admins.createdPart3": " ساخته شد.",
+  "errorPage.notFoundTitle": "صفحه پیدا نشد",
+  "errorPage.notFoundMessage": "نشانی واردشده وجود ندارد. از منوی سایت به صفحهٔ موردنظر بروید.",
+  "errorPage.invalidIdMessage": "شناسهٔ درخواست‌شده معتبر نیست.",
+  "errorPage.productNotFoundTitle": "محصول پیدا نشد",
+  "errorPage.productNotFoundMessage": "این محصول وجود ندارد یا در حال حاضر منتشر نشده است.",
+  "errorPage.articleNotFoundTitle": "مقاله پیدا نشد",
+  "errorPage.articleNotFoundMessage": "این مقاله وجود ندارد یا منتشر نشده است.",
+  "errorPage.tooManyTitle": "درخواست‌های زیاد",
+  "errorPage.tooManyMessage": "تعداد درخواست‌ها بیش از حد مجاز است. کمی بعد دوباره امتحان کنید.",
+  "flash.checkout.unavailable": "محصول در دسترس نیست.",
+  "flash.checkout.alreadyOwned": "این محصول قبلاً در کتابخانهٔ شما فعال شده است.",
+  "flash.checkout.gatewayNotConfigured": "درگاه پرداخت هنوز تنظیم نشده است؛ لطفاً بعداً مراجعه کنید.",
+  "flash.checkout.requestFailed": "ایجاد تراکنش ناموفق بود. کمی بعد دوباره تلاش کنید.",
+  "site.taglineDefault": "ابزارهای مهندسی، آموزش تخصصی و منابع تأسیسات"
 }

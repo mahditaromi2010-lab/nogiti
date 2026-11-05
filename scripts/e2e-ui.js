@@ -40,6 +40,34 @@ async function checkPage(page, url, label, expectStatus) {
   if (OUT) await page.screenshot({ path: path.join(OUT, `${label}${url.replace(/\//g, '_') || '_home'}.png`), fullPage: true });
 }
 
+// Calculator regressions found in the 2026-11-05 QA pass.
+async function checkCalculators(browser) {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const page = await context.newPage();
+  page.on('dialog', d => d.dismiss());
+  const meter = async value => {
+    await page.fill('#meterConsumption', '');
+    await page.focus('#meterConsumption');
+    await page.keyboard.type(value);
+    await page.click('[data-calc="meter"]');
+    return (await page.textContent('#meterResult')).replace(/\s+/g, ' ');
+  };
+  await page.goto(`${BASE}/lang/fa?next=/tools`);
+  for (const [value, cls] of [['2', 'G2.5'], ['4.05', 'G4'], ['6.05', 'G6'], ['65.05', 'G65'], ['۲٫۵', 'G2.5'], ['۱۲', 'G10']]) {
+    const text = await meter(value);
+    record(new RegExp(`\\b${cls.replace('.', '\\.')}\\b`).test(text), `meter ${value} m³/h -> ${cls}`, text.slice(0, 60));
+  }
+  await page.fill('#pipeLength', '۱۳'); await page.fill('#consumption', '7.6');
+  await page.click('[data-calc="pipe"]');
+  // 13 m rounds up to the 14 m row (1" carries 7.5), so 7.6 m³/h needs 1 1/4". The old incomplete
+  // table had no 14 m row and gave 1" here.
+  record((await page.textContent('#pipeResult')).includes('1 1/4"'), 'pipe 13 m (Persian digits), 7.6 m³/h -> 1 1/4" (14 m row)');
+  await page.goto(`${BASE}/lang/en?next=/tools`);
+  const en = await meter('2');
+  record(/Meter class/.test(en) && !/[؀-ۿ]/.test(en), 'English page shows calculator results in English', en.slice(0, 60));
+  await context.close();
+}
+
 (async () => {
   if (OUT) fs.mkdirSync(OUT, { recursive: true });
   const browser = await chromium.launch();
@@ -88,6 +116,7 @@ async function checkPage(page, url, label, expectStatus) {
       } else if (label === 'desktop') record(false, 'admin UI checks', 'ADMIN_USERNAME / ADMIN_PASSWORD not provided (NOT RUN)');
       await context.close();
     }
+    await checkCalculators(browser);
   } finally { await browser.close(); }
   const failed = results.filter(r => !r.ok);
   console.log(`\n${results.length - failed.length} passed, ${failed.length} failed`);
