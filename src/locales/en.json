@@ -694,5 +694,6 @@
   "kicker.lowPressure": "Low pressure",
   "kicker.profile": "Profile settings",
   "kicker.flue": "Flue and chimney",
-  "kicker.highPressure": "2 psi"
+  "kicker.highPressure": "2 psi",
+  "product.openImage": "Open the full-size image"
 }

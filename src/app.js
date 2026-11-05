@@ -369,7 +369,15 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
   const imageFilter = (_req, file, cb) => cb(allowedImageTypes.has(file.mimetype) ? null : new Error('File type rejected'), allowedImageTypes.has(file.mimetype));
   const coverUpload = multer({ storage: coverStorage, limits: { fileSize: 8 * 1024 * 1024, files: 1, fields: 40 }, fileFilter: imageFilter });
   const articleUpload = multer({ storage: coverStorage, limits: { fileSize: 8 * 1024 * 1024, files: 11, fields: 40 }, fileFilter: imageFilter }).fields([{ name: 'cover', maxCount: 1 }, { name: 'inline_images', maxCount: 10 }]);
-  const assetUpload = multer({ storage: privateStorage, limits: { fileSize: MAX_UPLOAD_MB * 1024 * 1024, files: 1, fields: 40 }, fileFilter: (_req, file, cb) => { const ext = path.extname(file.originalname).toLowerCase(); const ok = !!allowedAssetMimesByExtension[ext]?.has(file.mimetype); cb(ok ? null : new Error('File type rejected'), ok); } });
+  // Several images per submit (gallery, tutorial parts). 'image' is the older single-file field, still accepted.
+  const MAX_IMAGES_PER_UPLOAD = 12;
+  const imagesUpload = multer({ storage: coverStorage, limits: { fileSize: 8 * 1024 * 1024, files: MAX_IMAGES_PER_UPLOAD + 1, fields: 40 }, fileFilter: imageFilter })
+    .fields([{ name: 'image', maxCount: 1 }, { name: 'images', maxCount: MAX_IMAGES_PER_UPLOAD }]);
+  const uploadedList = req => [req.file, ...Object.values(req.files || {}).flat()].filter(Boolean);
+  // Course/plugin files: one file ('assetFile', older form) or several at once ('assetFiles', e.g. video parts 1..N).
+  const MAX_ASSETS_PER_UPLOAD = 10;
+  const assetUpload = multer({ storage: privateStorage, limits: { fileSize: MAX_UPLOAD_MB * 1024 * 1024, files: MAX_ASSETS_PER_UPLOAD + 1, fields: 40 }, fileFilter: (_req, file, cb) => { const ext = path.extname(file.originalname).toLowerCase(); const ok = !!allowedAssetMimesByExtension[ext]?.has(file.mimetype); cb(ok ? null : new Error('File type rejected'), ok); } })
+    .fields([{ name: 'assetFile', maxCount: 1 }, { name: 'assetFiles', maxCount: MAX_ASSETS_PER_UPLOAD }]);
   // Multipart CSRF check runs after multer parsed the token; any file already written is removed on failure.
   const multipartCsrf = (req, res, next) => {
     if (!safeEqual(req.session.csrfToken, req.body?._csrf)) {
@@ -439,7 +447,7 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
     if (!oldPath || oldPath === newPath || !/^\/media\/covers\/[A-Za-z0-9-]+\.(?:jpg|png|webp|gif)$/.test(oldPath)) return;
     const used = await pool.query(`SELECT (SELECT COUNT(*) FROM products WHERE cover_image=$1) + (SELECT COUNT(*) FROM articles WHERE cover_image=$1)
       + (SELECT COUNT(*) FROM article_images WHERE image_path=$1) + (SELECT COUNT(*) FROM product_gallery_images WHERE image_path=$1)
-      + (SELECT COUNT(*) FROM product_demo_steps WHERE image_path=$1) AS n`, [oldPath]);
+      + (SELECT COUNT(*) FROM product_demo_steps WHERE image_path=$1) + (SELECT COUNT(*) FROM product_demo_step_images WHERE image_path=$1) AS n`, [oldPath]);
     if (Number(used.rows[0].n) === 0) await fs.promises.rm(path.join(COVERS_DIR, path.basename(oldPath)), { force: true });
   }
   const intInRange = (value, min, max, fallback) => {
@@ -487,14 +495,9 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
       owned = !!own.rowCount;
     }
     const assets = await pool.query('SELECT id,title,asset_kind,is_preview,sort_order FROM product_assets WHERE product_id=$1 ORDER BY sort_order,id', [product.id]);
-    let gallery = [], demoSteps = [];
-    if (product.product_type === 'plugin') {
-      const [g, d] = await Promise.all([
-        pool.query('SELECT id,image_path,caption FROM product_gallery_images WHERE product_id=$1 ORDER BY sort_order,id', [product.id]),
-        pool.query('SELECT id,title,body,image_path FROM product_demo_steps WHERE product_id=$1 ORDER BY sort_order,id', [product.id])
-      ]);
-      gallery = g.rows; demoSteps = d.rows;
-    }
+    // Gallery for every product type (courses too); tutorial parts are a plugin feature.
+    const gallery = (await pool.query('SELECT id,image_path,caption FROM product_gallery_images WHERE product_id=$1 ORDER BY sort_order,id', [product.id])).rows;
+    const demoSteps = product.product_type === 'plugin' ? await loadDemoSteps(product.id) : [];
     res.render('product', { title: product.title, product, assets: assets.rows, owned, gallery, demoSteps });
   }));
   app.get('/articles', asyncRoute(async (req, res) => {
@@ -1192,10 +1195,10 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
       pool.query('SELECT * FROM products WHERE id=$1', [req.params.id]),
       pool.query('SELECT * FROM product_assets WHERE product_id=$1 ORDER BY sort_order,id', [req.params.id]),
       pool.query('SELECT * FROM product_gallery_images WHERE product_id=$1 ORDER BY sort_order,id', [req.params.id]),
-      pool.query('SELECT * FROM product_demo_steps WHERE product_id=$1 ORDER BY sort_order,id', [req.params.id])
+      loadDemoSteps(req.params.id)
     ]);
     if (!p.rowCount) return renderError(res, 404, 'محصول پیدا نشد', 'این محصول وجود ندارد.');
-    res.render('admin/product-form', { title: 'ویرایش محصول', product: p.rows[0], assets: a.rows, gallery: g.rows, demoSteps: d.rows, maxUploadMb: MAX_UPLOAD_MB });
+    res.render('admin/product-form', { title: 'ویرایش محصول', product: p.rows[0], assets: a.rows, gallery: g.rows, demoSteps: d, maxUploadMb: MAX_UPLOAD_MB });
   }));
   app.post('/admin/products/:id/edit', requireAdmin, coverUpload.single('cover'), multipartCsrf, verifyUploads(imagePolicy, req => `/admin/products/${req.params.id}/edit`), asyncRoute(async (req, res) => {
     const existing = await pool.query('SELECT * FROM products WHERE id=$1', [req.params.id]);
@@ -1208,21 +1211,43 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
     await removeCoverIfUnused(existing.rows[0].cover_image, cover);
     setFlash(req, 'success', 'محصول به‌روزرسانی شد.'); res.redirect(`/admin/products/${req.params.id}/edit`);
   }));
-  app.post('/admin/products/:id/assets', requireAdmin, assetUpload.single('assetFile'), multipartCsrf, verifyUploads(assetPolicy, req => `/admin/products/${req.params.id}/edit`), asyncRoute(async (req, res) => {
+  app.post('/admin/products/:id/assets', requireAdmin, assetUpload, multipartCsrf, verifyUploads(assetPolicy, req => `/admin/products/${req.params.id}/edit`), asyncRoute(async (req, res) => {
     const back = `/admin/products/${req.params.id}/edit`;
+    const files = uploadedList(req);
     const product = await pool.query('SELECT id FROM products WHERE id=$1', [req.params.id]);
     if (!product.rowCount) { removeUploaded(req); return renderError(res, 404, 'محصول پیدا نشد', 'این محصول وجود ندارد.'); }
-    const title = normalizeText(req.body.asset_title, 180);
+    const baseTitle = normalizeText(req.body.asset_title, 160);
     const kind = ['video', 'pdf', 'download', 'link'].includes(req.body.asset_kind) ? req.body.asset_kind : 'download';
-    const uploadedExt = req.file ? path.extname(req.file.originalname).toLowerCase() : '';
     const kindAllowed = { video: ['.mp4', '.webm'], pdf: ['.pdf'], download: ['.zip', '.pdf'], link: [] };
-    if (req.file && !kindAllowed[kind].includes(uploadedExt)) { removeUploaded(req); setFlash(req, 'error', 'پسوند فایل با نوع محتوای انتخاب‌شده سازگار نیست.'); return res.redirect(back); }
+    if (files.some(f => !kindAllowed[kind].includes(path.extname(f.originalname).toLowerCase()))) { removeUploaded(req); setFlash(req, 'error', 'پسوند یکی از فایل‌ها با نوع محتوای انتخاب‌شده سازگار نیست.'); return res.redirect(back); }
     const externalUrl = normalizeText(req.body.external_url, 1000);
-    if (!title || (!req.file && !externalUrl)) { removeUploaded(req); setFlash(req, 'error', 'نام محتوا و یک فایل یا نشانی معتبر HTTPS لازم است.'); return res.redirect(back); }
-    if (!req.file && !isHttpsUrl(externalUrl)) { setFlash(req, 'error', 'فقط پیوندهای HTTPS پذیرفته می‌شوند.'); return res.redirect(back); }
-    const sortOrder = intInRange(req.body.sort_order, -100000, 100000, 0);
-    await pool.query('INSERT INTO product_assets(product_id,title,asset_kind,file_key,external_url,is_preview,sort_order) VALUES($1,$2,$3,$4,$5,$6,$7)', [req.params.id, title, kind, req.file?.filename || '', req.file ? '' : externalUrl, req.body.is_preview === 'on', sortOrder]);
-    setFlash(req, 'success', 'محتوا به محصول اضافه شد.'); res.redirect(back);
+    if (!files.length && (!baseTitle || !externalUrl)) { setFlash(req, 'error', 'نام محتوا و یک فایل یا نشانی معتبر HTTPS لازم است.'); return res.redirect(back); }
+    if (!files.length && !isHttpsUrl(externalUrl)) { setFlash(req, 'error', 'فقط پیوندهای HTTPS پذیرفته می‌شوند.'); return res.redirect(back); }
+    if (files.length === 1 && !baseTitle) { removeUploaded(req); setFlash(req, 'error', 'نام محتوا الزامی است.'); return res.redirect(back); }
+    // New items go after the existing ones unless an explicit order was typed.
+    const typedOrder = String(req.body.sort_order ?? '').trim() !== '' ? intInRange(req.body.sort_order, -100000, 100000, 0) : null;
+    const { rows: [{ next_order: nextOrder, videos }] } = await pool.query("SELECT COALESCE(MAX(sort_order),0)+1 AS next_order, COUNT(*) FILTER (WHERE asset_kind='video')::int AS videos FROM product_assets WHERE product_id=$1", [req.params.id]);
+    const preview = req.body.is_preview === 'on';
+    if (!files.length) {
+      await pool.query('INSERT INTO product_assets(product_id,title,asset_kind,file_key,external_url,is_preview,sort_order) VALUES($1,$2,$3,$4,$5,$6,$7)', [req.params.id, baseTitle, kind, '', externalUrl, preview, typedOrder ?? nextOrder]);
+      setFlash(req, 'success', 'محتوا به محصول اضافه شد.'); return res.redirect(back);
+    }
+    // Several files at once = parts 1..N. Video parts are numbered after the video parts already on the product.
+    const many = files.length > 1;
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (const [i, f] of files.entries()) {
+        const partNo = (kind === 'video' ? videos : 0) + i + 1;
+        const title = many ? `${baseTitle || 'قسمت'}${baseTitle ? ' – قسمت ' : ' '}${partNo}` : baseTitle;
+        // Only the first part of a batch can be a free preview (a whole batch marked free would give the course away).
+        await client.query('INSERT INTO product_assets(product_id,title,asset_kind,file_key,external_url,is_preview,sort_order) VALUES($1,$2,$3,$4,$5,$6,$7)',
+          [req.params.id, normalizeText(title, 180), kind, f.filename, '', preview && i === 0, (typedOrder ?? nextOrder) + i]);
+      }
+      await client.query('COMMIT');
+    } catch (error) { await client.query('ROLLBACK').catch(() => {}); removeUploaded(req); throw error; }
+    finally { client.release(); }
+    setFlash(req, 'success', many ? `${files.length} قسمت به محصول اضافه شد.` : 'محتوا به محصول اضافه شد.'); res.redirect(back);
   }));
   app.post('/admin/assets/:id/delete', requireAdmin, asyncRoute(async (req, res) => {
     const r = await pool.query('DELETE FROM product_assets WHERE id=$1 RETURNING product_id,file_key', [req.params.id]);
@@ -1235,36 +1260,76 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
   }));
 
   // ───────────── Plugin product content: gallery images + usage/demo steps (item 5) ─────────────
-  app.post('/admin/products/:id/gallery', requireAdmin, coverUpload.single('image'), multipartCsrf, verifyUploads(imagePolicy, req => `/admin/products/${req.params.id}/edit`), asyncRoute(async (req, res) => {
+  app.post('/admin/products/:id/gallery', requireAdmin, imagesUpload, multipartCsrf, verifyUploads(imagePolicy, req => `/admin/products/${req.params.id}/edit`), asyncRoute(async (req, res) => {
     const back = `/admin/products/${req.params.id}/edit`;
     const product = await pool.query('SELECT id FROM products WHERE id=$1', [req.params.id]);
     if (!product.rowCount) { removeUploaded(req); return renderError(res, 404, 'محصول پیدا نشد', 'این محصول وجود ندارد.'); }
-    const imagePath = acceptableCoverValue(req.file, req.body.image_url);
-    if (!imagePath) { removeUploaded(req); setFlash(req, 'error', 'یک تصویر یا نشانی معتبر لازم است.'); return res.redirect(back); }
-    const sortOrder = intInRange(req.body.sort_order, -100000, 100000, 0);
-    await pool.query('INSERT INTO product_gallery_images(product_id,image_path,caption,sort_order) VALUES($1,$2,$3,$4)', [req.params.id, imagePath, normalizeText(req.body.caption, 300), sortOrder]);
-    setFlash(req, 'success', 'تصویر به گالری اضافه شد.'); res.redirect(back);
+    const paths = uploadedList(req).map(f => acceptableCoverValue(f, ''));
+    if (!paths.length) { const url = acceptableCoverValue(null, req.body.image_url); if (url) paths.push(url); }
+    if (!paths.length) { setFlash(req, 'error', 'دست‌کم یک تصویر یا نشانی معتبر لازم است.'); return res.redirect(back); }
+    const caption = normalizeText(req.body.caption, 300);
+    const typedOrder = String(req.body.sort_order ?? '').trim() !== '' ? intInRange(req.body.sort_order, -100000, 100000, 0) : null;
+    const next = Number((await pool.query('SELECT COALESCE(MAX(sort_order),0)+1 AS n FROM product_gallery_images WHERE product_id=$1', [req.params.id])).rows[0].n);
+    for (const [i, imagePath] of paths.entries()) {
+      await pool.query('INSERT INTO product_gallery_images(product_id,image_path,caption,sort_order) VALUES($1,$2,$3,$4)', [req.params.id, imagePath, caption, (typedOrder ?? next) + i]);
+    }
+    setFlash(req, 'success', paths.length > 1 ? `${paths.length} تصویر به گالری اضافه شد.` : 'تصویر به گالری اضافه شد.'); res.redirect(back);
   }));
   app.post('/admin/gallery/:id/delete', requireAdmin, asyncRoute(async (req, res) => {
     const r = await pool.query('DELETE FROM product_gallery_images WHERE id=$1 RETURNING product_id,image_path', [req.params.id]);
     if (r.rowCount) await removeCoverIfUnused(r.rows[0].image_path, '');
     setFlash(req, r.rowCount ? 'success' : 'error', r.rowCount ? 'تصویر حذف شد.' : 'این تصویر پیدا نشد.'); res.redirect(r.rowCount ? `/admin/products/${r.rows[0].product_id}/edit` : '/admin/products');
   }));
-  app.post('/admin/products/:id/demo-steps', requireAdmin, coverUpload.single('image'), multipartCsrf, verifyUploads(imagePolicy, req => `/admin/products/${req.params.id}/edit`), asyncRoute(async (req, res) => {
+  async function loadDemoSteps(productId) {
+    const steps = (await pool.query('SELECT id,title,body,image_path,sort_order FROM product_demo_steps WHERE product_id=$1 ORDER BY sort_order,id', [productId])).rows;
+    if (!steps.length) return steps;
+    const imgs = (await pool.query('SELECT id,step_id,image_path,caption FROM product_demo_step_images WHERE step_id = ANY($1::bigint[]) ORDER BY sort_order,id', [steps.map(s => s.id)])).rows;
+    for (const st of steps) {
+      st.images = (st.image_path ? [{ id: null, image_path: st.image_path, caption: '' }] : []).concat(imgs.filter(i => String(i.step_id) === String(st.id)));
+    }
+    return steps;
+  }
+  // Tutorial parts ("demo steps"): each part has a title, text and any number of images.
+  async function addStepImages(stepId, paths, caption) {
+    const next = Number((await pool.query('SELECT COALESCE(MAX(sort_order),0)+1 AS n FROM product_demo_step_images WHERE step_id=$1', [stepId])).rows[0].n);
+    for (const [i, imagePath] of paths.entries()) {
+      await pool.query('INSERT INTO product_demo_step_images(step_id,image_path,caption,sort_order) VALUES($1,$2,$3,$4)', [stepId, imagePath, caption, next + i]);
+    }
+  }
+  app.post('/admin/products/:id/demo-steps', requireAdmin, imagesUpload, multipartCsrf, verifyUploads(imagePolicy, req => `/admin/products/${req.params.id}/edit`), asyncRoute(async (req, res) => {
     const back = `/admin/products/${req.params.id}/edit`;
     const product = await pool.query('SELECT id FROM products WHERE id=$1', [req.params.id]);
     if (!product.rowCount) { removeUploaded(req); return renderError(res, 404, 'محصول پیدا نشد', 'این محصول وجود ندارد.'); }
     const title = normalizeText(req.body.title, 200);
-    if (!title) { removeUploaded(req); setFlash(req, 'error', 'عنوان مرحله الزامی است.'); return res.redirect(back); }
-    const imagePath = acceptableCoverValue(req.file, req.body.image_url);
-    const sortOrder = intInRange(req.body.sort_order, -100000, 100000, 0);
-    await pool.query('INSERT INTO product_demo_steps(product_id,title,body,image_path,sort_order) VALUES($1,$2,$3,$4,$5)', [req.params.id, title, normalizeText(req.body.body, 2000), imagePath, sortOrder]);
-    setFlash(req, 'success', 'مرحلهٔ راهنما اضافه شد.'); res.redirect(back);
+    if (!title) { removeUploaded(req); setFlash(req, 'error', 'عنوان پارت الزامی است.'); return res.redirect(back); }
+    const paths = uploadedList(req).map(f => acceptableCoverValue(f, ''));
+    const url = acceptableCoverValue(null, req.body.image_url); if (url) paths.push(url);
+    const typedOrder = String(req.body.sort_order ?? '').trim() !== '' ? intInRange(req.body.sort_order, -100000, 100000, 0) : null;
+    const next = Number((await pool.query('SELECT COALESCE(MAX(sort_order),0)+1 AS n FROM product_demo_steps WHERE product_id=$1', [req.params.id])).rows[0].n);
+    const step = await pool.query('INSERT INTO product_demo_steps(product_id,title,body,image_path,sort_order) VALUES($1,$2,$3,$4,$5) RETURNING id', [req.params.id, title, normalizeText(req.body.body, 2000), '', typedOrder ?? next]);
+    await addStepImages(step.rows[0].id, paths, '');
+    setFlash(req, 'success', paths.length ? `پارت آموزش با ${paths.length} تصویر اضافه شد.` : 'پارت آموزش اضافه شد.'); res.redirect(back);
+  }));
+  app.post('/admin/demo-steps/:id/images', requireAdmin, imagesUpload, multipartCsrf, verifyUploads(imagePolicy, '/admin/products'), asyncRoute(async (req, res) => {
+    const step = await pool.query('SELECT id, product_id FROM product_demo_steps WHERE id=$1', [req.params.id]);
+    if (!step.rowCount) { removeUploaded(req); return renderError(res, 404, 'پارت پیدا نشد', 'این پارت آموزش وجود ندارد.'); }
+    const back = `/admin/products/${step.rows[0].product_id}/edit#step-${req.params.id}`;
+    const paths = uploadedList(req).map(f => acceptableCoverValue(f, ''));
+    if (!paths.length) { setFlash(req, 'error', 'دست‌کم یک تصویر انتخاب کنید.'); return res.redirect(back); }
+    await addStepImages(req.params.id, paths, normalizeText(req.body.caption, 300));
+    setFlash(req, 'success', `${paths.length} تصویر به پارت اضافه شد.`); res.redirect(back);
+  }));
+  app.post('/admin/demo-step-images/:id/delete', requireAdmin, asyncRoute(async (req, res) => {
+    const r = await pool.query('DELETE FROM product_demo_step_images i USING product_demo_steps s WHERE i.id=$1 AND s.id=i.step_id RETURNING i.image_path, s.product_id, s.id AS step_id', [req.params.id]);
+    if (r.rowCount) await removeCoverIfUnused(r.rows[0].image_path, '');
+    setFlash(req, r.rowCount ? 'success' : 'error', r.rowCount ? 'تصویر حذف شد.' : 'این تصویر پیدا نشد.');
+    res.redirect(r.rowCount ? `/admin/products/${r.rows[0].product_id}/edit#step-${r.rows[0].step_id}` : '/admin/products');
   }));
   app.post('/admin/demo-steps/:id/delete', requireAdmin, asyncRoute(async (req, res) => {
+    const images = (await pool.query('SELECT image_path FROM product_demo_step_images WHERE step_id=$1', [req.params.id])).rows.map(r => r.image_path);
     const r = await pool.query('DELETE FROM product_demo_steps WHERE id=$1 RETURNING product_id,image_path', [req.params.id]);
-    if (r.rowCount && r.rows[0].image_path) await removeCoverIfUnused(r.rows[0].image_path, '');
-    setFlash(req, r.rowCount ? 'success' : 'error', r.rowCount ? 'مرحله حذف شد.' : 'این مرحله پیدا نشد.'); res.redirect(r.rowCount ? `/admin/products/${r.rows[0].product_id}/edit` : '/admin/products');
+    if (r.rowCount) for (const p of [r.rows[0].image_path, ...images]) if (p) await removeCoverIfUnused(p, '');
+    setFlash(req, r.rowCount ? 'success' : 'error', r.rowCount ? 'پارت حذف شد.' : 'این پارت پیدا نشد.'); res.redirect(r.rowCount ? `/admin/products/${r.rows[0].product_id}/edit` : '/admin/products');
   }));
 
   // ───────────── Articles ─────────────
@@ -1493,9 +1558,11 @@ function createApp({ pool, logger = defaultLogger, uploadDir } = {}) {
   app.use((err, req, res, _next) => {
     removeUploaded(req);
     if (err instanceof multer.MulterError) {
-      const imageField = ['cover', 'inline_images'].includes(err.field);
+      const imageField = ['cover', 'inline_images', 'image', 'images'].includes(err.field);
       const limit = imageField ? 8 : MAX_UPLOAD_MB;
-      const message = err.code === 'LIMIT_FILE_SIZE' ? `حجم فایل بیشتر از حد مجاز (${limit} مگابایت) است.` : 'بارگذاری فایل انجام نشد.';
+      const tooMany = err.code === 'LIMIT_FILE_COUNT' || err.code === 'LIMIT_UNEXPECTED_FILE';
+      const message = err.code === 'LIMIT_FILE_SIZE' ? `حجم فایل بیشتر از حد مجاز (${limit} مگابایت) است.`
+        : tooMany ? `تعداد فایل‌ها بیش از حد مجاز است (هر بار حداکثر ${imageField ? MAX_IMAGES_PER_UPLOAD : MAX_ASSETS_PER_UPLOAD} فایل).` : 'بارگذاری فایل انجام نشد.';
       return renderError(res, 400, 'خطا در بارگذاری فایل', message);
     }
     if (err.message === 'File type rejected') return renderError(res, 400, 'نوع فایل مجاز نیست', 'نوع فایل انتخاب‌شده پشتیبانی نمی‌شود.');
